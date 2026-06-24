@@ -1,0 +1,32 @@
+{
+  "name": "content-studio-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7",
+    "clsx": "^2.1",
+    "lucide-react": "^0.400",
+    "next": "^14.2",
+    "react": "^18.3",
+    "react-dom": "^18.3",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10",
+    "eslint": "^8",
+    "eslint-config-next": "^14.2",
+    "postcss": "^8",
+    "tailwindcss": "^3.4",
+    "typescript": "^5.5"
+  }
+}

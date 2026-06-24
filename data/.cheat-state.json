@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.4-ext",
+  "your_project_version": "0.1.0",
+  "rubric_version": "v0",
+  "content_form": "opinion-video",
+  "platforms": [
+    "douyin",
+    "xiaohongshu"
+  ],
+  "typical_duration_seconds": 240,
+  "target_publish_cadence_days": 2,
+  "baseline_plays": null,
+  "calibration_samples": 0,
+  "last_bump_at": null,
+  "rubric_weights": {
+    "ER": 1.0,
+    "HP": 1.0,
+    "QL": 1.0,
+    "NA": 1.0,
+    "AB": 1.0,
+    "SR": 1.0,
+    "SAT": 1.0,
+    "TS": 1.0,
+    "MS": 1.0,
+    "CC": 1.0
+  },
+  "enabled_trend_sources": [
+    "douyin-hot",
+    "xhs-explore"
+  ],
+  "pending_retros": [],
+  "shoots": [],
+  "in_progress_session": "2026-06-15_d039ac20_一个 ai预测视频爆款的工具免费送给你们",
+  "hooks_installed": false,
+  "initialized_at": "2026-06-09T23:27:14.810780"
+}

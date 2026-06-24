@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent: #22c55e;
+    --accent-dim: #16a34a;
+    --accent-glow: rgba(34, 197, 94, 0.15);
+    --accent-glow-strong: rgba(34, 197, 94, 0.3);
+    --bg-primary: #0a0a0a;
+    --bg-card: #111111;
+    --bg-card-hover: #1a1a1a;
+    --bg-input: #1a1a1a;
+    --border: #222222;
+    --border-accent: #22c55e33;
+    --text-primary: #f0f0f0;
+    --text-secondary: #888888;
+    --text-muted: #555555;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #444;
+  }
+}
+
+@layer components {
+  /* Card */
+  .card {
+    @apply rounded-xl border p-5 transition-all duration-200;
+    background: var(--bg-card);
+    border-color: var(--border);
+  }
+  .card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  /* Button primary */
+  .btn-primary {
+    @apply rounded-lg px-5 py-2.5 font-medium transition-all duration-200;
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover {
+    background: var(--accent-dim);
+    box-shadow: 0 0 15px var(--accent-glow-strong);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Button ghost */
+  .btn-ghost {
+    @apply rounded-lg px-5 py-2.5 font-medium transition-all duration-200;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* Input */
+  .input {
+    @apply rounded-lg px-4 py-2.5 transition-all duration-200 outline-none;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  .input::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Select */
+  .select {
+    @apply rounded-lg px-4 py-2.5 transition-all duration-200 outline-none cursor-pointer;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+
+  /* Badge */
+  .badge {
+    @apply rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-green {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+  .badge-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+  .badge-yellow {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+  }
+  .badge-blue {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+  }
+
+  /* Glow text */
+  .text-glow {
+    color: var(--accent);
+    text-shadow: 0 0 10px var(--accent-glow-strong);
+  }
+
+  /* Divider */
+  .divider {
+    border-color: var(--border);
+  }
+
+  /* Tab */
+  .tab-active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+  }
+  .tab-inactive {
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tab-inactive:hover {
+    color: var(--text-secondary);
+  }
+
+  /* Nav item */
+  .nav-item {
+    color: var(--text-secondary);
+    padding: 9px 12px;
+    border-radius: 6px;
+    margin-bottom: 3px;
+    font-size: 16px;
+  }
+  .nav-item:hover,
+  .nav-active {
+    color: var(--accent);
+    background: rgba(34, 197, 94, 0.08);
+  }
+
+  /* Auth buttons */
+  .btn-auth {
+    background: transparent;
+  }
+  .btn-auth:hover {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.08);
+  }
+}

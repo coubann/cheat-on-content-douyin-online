@@ -1,0 +1,33 @@
+# 环境变量文件（含密钥）
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+dist/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# 本地数据库
+data/*.db
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 日志
+*.log
+
+# 文档（按用户要求排除所有 markdown）
+*.md

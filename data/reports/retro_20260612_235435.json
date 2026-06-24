@@ -1,0 +1,98 @@
+{
+  "status": "ok",
+  "generated_at": "2026-06-12T23:54:35.818820",
+  "summary": {
+    "total_retros": 2,
+    "calibration_samples": 0,
+    "rubric_version": "v0",
+    "last_bump_at": null
+  },
+  "accuracy": {
+    "total": 2,
+    "accuracy_distribution": {
+      "overestimated": 0,
+      "underestimated": 0,
+      "accurate": 0,
+      "unknown": 2
+    },
+    "accuracy_rate": 0.0,
+    "plays": {
+      "avg": 0,
+      "max": 0,
+      "min": 0
+    },
+    "composite": {
+      "avg": 6.1
+    },
+    "top3": [
+      {
+        "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+        "actual_plays": 0,
+        "composite": 6.0
+      },
+      {
+        "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+        "actual_plays": 0,
+        "composite": 6.2
+      }
+    ],
+    "bottom3": [
+      {
+        "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+        "actual_plays": 0,
+        "composite": 6.0
+      },
+      {
+        "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+        "actual_plays": 0,
+        "composite": 6.2
+      }
+    ]
+  },
+  "dimension_analysis": {
+    "dimensions": {},
+    "most_predictive": null,
+    "least_predictive": null
+  },
+  "rubric_history": [],
+  "best_performers": [
+    {
+      "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+      "actual_plays": 0,
+      "composite": 6.0
+    },
+    {
+      "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+      "actual_plays": 0,
+      "composite": 6.2
+    }
+  ],
+  "worst_performers": [
+    {
+      "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+      "actual_plays": 0,
+      "composite": 6.0
+    },
+    {
+      "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+      "actual_plays": 0,
+      "composite": 6.2
+    }
+  ],
+  "llm_insights": {
+    "overall_assessment": "当前数据量极小（仅2条复盘），且播放量为0，无法建立任何有效的预测或评估模型，所有结论均需谨慎对待。",
+    "key_findings": [
+      "两条复盘的 composite 得分分别为6.0和6.2，但实际播放量均为0，说明当前评分维度与用户实际反馈（播放量）严重脱节。",
+      "准确率无法计算（0/0），高估、低估均为0，缺乏任何可用于校准 rubric 的真实表现数据。",
+      "维度分析中“最预测性维度”和“最不预测性维度”均为None，反映当前数据无法支持维度有效性的判断。"
+    ],
+    "rubric_recommendation": "建议暂停对 rubric v0 的调整，优先收集至少10-20条含有非零播放量的复盘数据，确保 composite 得分与实际播放量之间存在可观测的相关性后，再考虑修改评分维度或权重。",
+    "content_strategy": "两条内容（焦虑、AI聊天）主题常见但播放为0，可能因标题/封面吸引力不足或发布时机/渠道不当。建议：1) 对同主题内容进行A/B测试标题；2) 选择用户活跃时段发布；3) 尝试分享到社区或微信群获得初始曝光。",
+    "next_bump_trigger": "累计至少10条复盘且其中至少5条播放量>0，并观察到 composite 得分与播放量之间存在单调关系（例如高得分条目播放量明显高于低得分条目）时，再考虑 bump 操作。",
+    "risk_warnings": [
+      "当前数据量过小，任何基于此的洞察都可能产生误导性结论。",
+      "播放量为0可能表明内容未被平台推荐或触达目标用户，而非内容本身质量差，需区分原因。",
+      "rubric 版本v0可能完全无关乎实际表现，若持续使用可能导致错误决策。"
+    ]
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "status": "ok",
+  "generated_at": "2026-06-13T00:53:06.574029",
+  "summary": {
+    "total_retros": 2,
+    "calibration_samples": 0,
+    "rubric_version": "v0",
+    "last_bump_at": null
+  },
+  "accuracy": {
+    "total": 2,
+    "accuracy_distribution": {
+      "overestimated": 1,
+      "underestimated": 0,
+      "accurate": 0,
+      "unknown": 1
+    },
+    "accuracy_rate": 0.0,
+    "plays": {
+      "avg": 498,
+      "max": 498,
+      "min": 498
+    },
+    "composite": {
+      "avg": 6.1
+    },
+    "top3": [
+      {
+        "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+        "actual_plays": 498,
+        "composite": 6.2
+      },
+      {
+        "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+        "actual_plays": 0,
+        "composite": 6.0
+      }
+    ],
+    "bottom3": [
+      {
+        "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+        "actual_plays": 498,
+        "composite": 6.2
+      },
+      {
+        "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+        "actual_plays": 0,
+        "composite": 6.0
+      }
+    ]
+  },
+  "dimension_analysis": {
+    "dimensions": {},
+    "most_predictive": null,
+    "least_predictive": null
+  },
+  "rubric_history": [],
+  "best_performers": [
+    {
+      "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+      "actual_plays": 498,
+      "composite": 6.2
+    },
+    {
+      "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+      "actual_plays": 0,
+      "composite": 6.0
+    }
+  ],
+  "worst_performers": [
+    {
+      "script_id": "2026-06-10_6a688060_不要再用AI只会聊天了",
+      "actual_plays": 498,
+      "composite": 6.2
+    },
+    {
+      "script_id": "2026-06-09_c29026ef_为什么你总是焦虑",
+      "actual_plays": 0,
+      "composite": 6.0
+    }
+  ],
+  "llm_insights": {
+    "overall_assessment": "当前复盘数据量过少，且composite分数与播放表现存在明显脱节，需积累更多样本以校准预测模型。",
+    "key_findings": [
+      "两条标题的composite分数接近（6.0 vs 6.2），但播放量差异巨大（0 vs 498），说明当前评分体系对实际表现的预测力不足。",
+      "唯一有播放量的标题被标记为“overestimated”，表明rubric可能过于乐观，需要下调阈值或引入更多特征。",
+      "缺乏准确/低估的对比样本，无法判断是否存在系统性偏差，建议优先扩充复盘数据。"
+    ],
+    "rubric_recommendation": "建议将composite高估阈值从当前默认值下调0.3-0.5，并引入播放量历史中位数作为校准参考；在样本量不足20条时，暂不依赖维度分析调整权重。",
+    "content_strategy": "可尝试复刻“不要再用AI只会聊天了”的标题结构（否定式+实用场景），但需降低对高播放的预期；同时测试与“焦虑”相关的情绪类标题，观察是否因话题热度不足导致零播放。",
+    "next_bump_trigger": "建议至少收集10条有效复盘数据（含至少3条高估/低估交叉验证），且连续5条标题的composite均值≥6.5时再触发下一次bump。",
+    "risk_warnings": [
+      "当前复盘仅2条，统计结论存在极大偶然性，切勿据此大幅调整策略。",
+      "高估标签可能反映rubric对“AI聊天”类话题的偏好，需警惕过拟合风险。"
+    ]
+  }
+}
