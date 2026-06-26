@@ -12,9 +12,11 @@ build
 data/*.db
 *.db
 
-# 环境变量
+# 环境变量（保留 .env.example 用于 Docker 构建）
 .env
-.env.*
+.env.local
+.env.development
+.env.production
 
 # Git
 .git
