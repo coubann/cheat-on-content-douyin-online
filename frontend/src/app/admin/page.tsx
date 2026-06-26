@@ -187,7 +187,7 @@ export default function AdminPage() {
     const res = await apiFetch(`/api/admin/llm-providers/${name}/test`, {
       method: "POST", body: "{}", headers: authHeaders(),
     });
-    if (res.ok && res.data?.ok) {
+    if (res.ok) {
       setLlmMessage({ type: "ok", text: `${name}: 连接成功 ✅` });
     } else {
       setLlmMessage({ type: "error", text: `${name}: 连接失败 ❌` });
@@ -242,7 +242,7 @@ export default function AdminPage() {
                   <span>点数: {u.points as number}</span>
                   <span>免费: {u.free_points_today as number}</span>
                   <span>会员: {u.membership_type as string}</span>
-                  {u.disabled && <span style={{ color: "#ef4444" }}>已禁用</span>}
+                  {Boolean(u.disabled) && <span style={{ color: "#ef4444" }}>已禁用</span>}
                 </div>
               </div>
               <button onClick={() => handleEditUser(u)} className="btn-ghost text-xs px-3 py-1">

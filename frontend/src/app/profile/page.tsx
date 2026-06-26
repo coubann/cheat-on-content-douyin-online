@@ -353,7 +353,7 @@ export default function ProfilePage() {
                 {tier.label}
               </p>
               <p className="text-lg font-bold mt-1">{tier.points}</p>
-            </a>
+            </button>
           ))}
         </div>
       </div>
