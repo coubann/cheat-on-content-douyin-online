@@ -15,7 +15,7 @@ const MEMBERSHIP_OPTIONS = [
 export default function AdminPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<"users" | "config" | "announcements" | "orders">("users");
+  const [tab, setTab] = useState<"users" | "llm" | "config" | "announcements" | "orders">("users");
   const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
   const [announcements, setAnnouncements] = useState<Array<Record<string, unknown>>>([]);
   const [orders, setOrders] = useState<Array<Record<string, unknown>>>([]);
@@ -463,9 +463,9 @@ export default function AdminPage() {
             orders.map((o) => (
               <div key={o.id as number} className="card flex items-center justify-between text-sm">
                 <div className="space-y-1">
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>用户ID:</span> {o.user_id}</p>
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>档位:</span> {o.tier}</p>
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>点数:</span> {o.points_granted}</p>
+                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>用户ID:</span> {o.user_id as string}</p>
+                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>档位:</span> {o.tier as string}</p>
+                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>点数:</span> {o.points_granted as string}</p>
                   <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>金额:</span> ¥{(o.amount as number / 100).toFixed(2)}</p>
                 </div>
                 <div className="text-right space-y-1">

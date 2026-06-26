@@ -287,7 +287,7 @@ export default function ProfilePage() {
               >
                 <div>
                   <span>{String(log.reason || "")}</span>
-                  {log.detail && (
+                  {Boolean(log.detail) && (
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {String(log.detail)}
                     </p>

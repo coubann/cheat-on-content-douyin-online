@@ -123,9 +123,9 @@ export default function ScriptsPage() {
           <button
             className="btn-primary"
             onClick={handleCreate}
-            disabled={loading || !title || !content}
+            disabled={saving || !title || !content}
           >
-            {loading ? "创建中..." : "创建"}
+            {saving ? "创建中..." : "创建"}
           </button>
         </div>
       )}
