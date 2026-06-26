@@ -18,7 +18,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"  # 修改为 3001，避免与 trace-saas-server 冲突
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
