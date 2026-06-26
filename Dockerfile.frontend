@@ -27,9 +27,8 @@ COPY --from=builder /app/next.config.js ./
 # 只安装生产依赖（减小镜像大小）
 RUN npm install --production
 
-# 复制构建产物和静态资源
+# 复制构建产物
 COPY --from=builder /app/.next/ .next/
-COPY --from=builder /app/public/ public/
 
 # 暴露端口
 EXPOSE 3000
