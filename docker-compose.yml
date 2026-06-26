@@ -9,20 +9,26 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/content_studio.db
+      - PYTHONPATH=/app
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - ./backend:/app/backend  # 卷映射：代码修改后立即生效
+      - ./data:/app/data      # 卷映射：数据库持久化
     command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.frontend
     ports:
       - "3001:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://douyin.hapaxtrace.com
+      - NODE_ENV=production
+    env_file:
+      - .env
     depends_on:
       - backend
-    command: npm run dev
+    restart: unless-stopped
