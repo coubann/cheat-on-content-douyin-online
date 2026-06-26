@@ -7,10 +7,12 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/content_studio.db
     env_file:
       - .env
     volumes:
-      - ./backend/data:/app/backend/data
+      - ./data:/app/data
     command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -18,7 +20,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3001:3000"  # 修改为 3001，避免与 trace-saas-server 冲突
+      - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
