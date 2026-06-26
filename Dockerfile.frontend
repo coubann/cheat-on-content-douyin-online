@@ -20,18 +20,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# 复制 package.json
+# 复制 package.json 和 next.config
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/next.config.js ./
 
 # 只安装生产依赖（减小镜像大小）
 RUN npm install --production
 
-# 复制构建产物
+# 复制构建产物和静态资源
 COPY --from=builder /app/.next/ .next/
 COPY --from=builder /app/public/ public/
-COPY --from=builder /app/next.config.mjs ./
-COPY --from=builder /app/postcss.config.mjs ./
-COPY --from=builder /app/tailwind.config.ts ./
 
 # 暴露端口
 EXPOSE 3000
