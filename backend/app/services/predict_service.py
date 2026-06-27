@@ -347,7 +347,7 @@ def _build_prediction_file(
 ## 预测
 
 > **IMMUTABLE** — 此段写完后不可修改，只能追加 `## 复盘` 段。
-> 预测 hash: {get_prediction_hash(_prediction_hash_input)[:0]}（落盘后自动计算）
+> 预测 hash: {get_prediction_hash(_prediction_hash_input)[:8]}（落盘后自动计算）
 
 ### 1. Header
 - 脚本 ID: {script_id}

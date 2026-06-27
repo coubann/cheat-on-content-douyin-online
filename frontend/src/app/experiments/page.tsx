@@ -291,8 +291,8 @@ export default function ExperimentsPage() {
               <div className="mt-4 rounded-lg p-3" style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
                 <div className="text-sm font-medium" style={{ color: "#22c55e" }}>实验结论</div>
                 <p className="text-sm mt-1">
-                  {String(exp.result.winner) && `胜出: ${String(exp.result.winner) === "a" ? "脚本 A" : "脚本 B"}`}
-                  {String(exp.result.summary) && ` · ${String(exp.result.summary)}`}
+                  {exp.result.winner != null && `胜出: ${String(exp.result.winner) === "a" ? "脚本 A" : "脚本 B"}`}
+                  {exp.result.summary != null && ` · ${String(exp.result.summary)}`}
                 </p>
               </div>
             )}

@@ -215,6 +215,15 @@ async def register(req: RegisterRequest) -> ApiResponse:
 
             invite_record.reward_granted = True
 
+        # 注册时发放当日免费积分（与登录逻辑一致）
+        from datetime import date
+        today = date.today()
+        free_granted = 0
+        if user.free_points_date != today:
+            user.free_points_today = DAILY_FREE_POINTS
+            user.free_points_date = today
+            free_granted = DAILY_FREE_POINTS
+
         await session.commit()
 
     # 生成 JWT
@@ -223,6 +232,7 @@ async def register(req: RegisterRequest) -> ApiResponse:
     return ApiResponse(ok=True, data={
         "token": token,
         "user": user.to_dict(),
+        "free_points_granted": free_granted,
     })
 
 
@@ -272,8 +282,8 @@ async def login(req: LoginRequest) -> ApiResponse:
                 "premium": 500,
             }.get(user.membership_type, 0)
             if membership_bonus > 0:
-                user.free_points_today = membership_bonus
-                free_granted = membership_bonus
+                user.free_points_today = DAILY_FREE_POINTS + membership_bonus
+                free_granted = DAILY_FREE_POINTS + membership_bonus
 
         # 记录登录行为
         session.add(UserAction(

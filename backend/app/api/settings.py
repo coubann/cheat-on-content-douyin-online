@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from backend.app.models.response import ApiResponse
+from backend.app.models.response import ApiResponse, ErrorDetail
 from backend.app.services.settings_service import (
     get_provider_settings,
     save_default_provider,
@@ -34,7 +34,7 @@ async def save_provider(provider_name: str, body: dict[str, Any]) -> ApiResponse
         base_url=body.get("base_url"),
     )
     if result.get("status") == "error":
-        return ApiResponse(ok=False, error={"code": "INVALID_REQUEST", "message": result["message"]})
+        return ApiResponse(ok=False, error=ErrorDetail(code="INVALID_REQUEST", message=result["message"]))
     return ApiResponse(ok=True, data=result)
 
 
@@ -44,7 +44,7 @@ async def set_default_provider(body: dict[str, Any]) -> ApiResponse:
     provider = body.get("provider", "")
     result = save_default_provider(provider)
     if result.get("status") == "error":
-        return ApiResponse(ok=False, error={"code": "INVALID_REQUEST", "message": result["message"]})
+        return ApiResponse(ok=False, error=ErrorDetail(code="INVALID_REQUEST", message=result["message"]))
     return ApiResponse(ok=True, data=result)
 
 
@@ -54,7 +54,7 @@ async def test_connection(provider_name: str) -> ApiResponse:
     result = await test_provider_connection(provider_name)
     if result.get("ok"):
         return ApiResponse(ok=True, data=result)
-    return ApiResponse(ok=False, error={"code": "LLM_CALL_FAILED", "message": result.get("message", "连接失败")})
+    return ApiResponse(ok=False, error=ErrorDetail(code="LLM_CALL_FAILED", message=result.get("message", "连接失败")))
 
 
 @router.get("/llm-status")

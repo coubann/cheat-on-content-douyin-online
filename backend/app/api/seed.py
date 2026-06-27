@@ -21,4 +21,4 @@ async def recommend_topics_endpoint(
     strategy: balanced(平衡) / safe(稳妥) / experimental(实验)
     """
     result = await recommend_topics(DATA_DIR, count=count, strategy=strategy)
-    return ApiResponse(data=result)
+    return ApiResponse(ok=True, data=result)

@@ -40,6 +40,7 @@ class TaskInfo:
         self.created_at = datetime.now().isoformat()
         self.started_at: str | None = None
         self.completed_at: str | None = None
+        self.cancelled: bool = False
 
 
 class TaskQueue:
@@ -150,13 +151,14 @@ class TaskQueue:
         Pre-conditions:
           - task_id 存在
         Post-conditions:
-          - 如果任务处于 PENDING 状态则移除并返回 True，否则返回 False
+          - 如果任务处于 PENDING 状态则标记为取消并返回 True，否则返回 False
         Side effects:
-          - 从 _tasks 中移除任务
+          - 标记 cancelled 标志，worker 会在执行前跳过
         """
         info = self._tasks.get(task_id)
         if info and info.status == TaskStatus.PENDING:
             info.status = TaskStatus.FAILED
+            info.cancelled = True
             info.error = "cancelled"
             info.completed_at = datetime.now().isoformat()
             return True
@@ -178,6 +180,10 @@ class TaskQueue:
                 task_id, task_data = await self._queue.get()
                 info = self._tasks.get(task_id)
                 if not info:
+                    continue
+
+                # 如果任务已被取消，跳过执行
+                if info.cancelled:
                     continue
 
                 info.status = TaskStatus.RUNNING

@@ -8,7 +8,10 @@ const API_BASE =
     : "";
 
 // 预测等长时间操作直连后端，绕过 Next.js 代理超时
-const BACKEND_DIRECT = "http://localhost:8000";
+// 生产环境走域名，开发环境走 localhost
+const BACKEND_DIRECT = typeof window === "undefined"
+  ? "http://localhost:8000"
+  : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
 const LONG_RUNNING_PATHS = ["/api/predict/full", "/api/publish/retro", "/api/bump", "/api/benchmark/extract-transcript", "/api/persona/build"];
 const LONG_RUNNING_SUFFIXES = ["/optimize"];  // 路径后缀匹配
 
@@ -85,12 +88,17 @@ export async function sseFetch<T>(
   body: Record<string, unknown>,
   onProgress: (event: { phase: string; progress: number; current?: number; total?: number }) => void,
 ): Promise<T> {
-  const BACKEND_DIRECT = "http://localhost:8000";
-  const url = `${BACKEND_DIRECT}${path}`;
+  const SSE_BASE = typeof window === "undefined"
+    ? "http://localhost:8000"
+    : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
+  const url = `${SSE_BASE}${path}`;
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}),
+    },
     body: JSON.stringify(body),
   });
 

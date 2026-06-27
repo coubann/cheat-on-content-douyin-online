@@ -7,7 +7,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from backend.app.config import DATA_DIR
-from backend.app.models.response import ApiResponse
+from backend.app.models.response import ApiResponse, ErrorDetail
 from backend.app.services import pipeline_service
 
 router = APIRouter()
@@ -30,5 +30,5 @@ async def get_pipeline() -> ApiResponse:
     except FileNotFoundError:
         return ApiResponse(
             ok=False,
-            error={"code": "NOT_INITIALIZED", "message": "项目未初始化，请先执行初始化"},
+            error=ErrorDetail(code="NOT_INITIALIZED", message="项目未初始化，请先执行初始化"),
         )

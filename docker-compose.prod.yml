@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "127.0.0.1:8000:8000"    # 仅本地访问，Nginx 反代
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/content_studio.db
+      - PYTHONPATH=/app
+      - APP_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data          # 数据库持久化（只挂数据目录）
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+    restart: always
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "127.0.0.1:3001:3000"    # 仅本地访问，Nginx 反代
+    environment:
+      - NEXT_PUBLIC_API_URL=https://douyin.hapaxtrace.com
+      - NODE_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    restart: always

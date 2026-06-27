@@ -147,7 +147,8 @@ async def refund_points(
         if user is None:
             return {"refunded": 0, "error": "user_not_found"}
 
-        user.free_points_today += amount
+        # 退还到 recharge 池（与注释一致：简化实现退回到 recharge 池）
+        user.points += amount
 
         log_detail = f"AI 调用失败自动退款: {amount}点"
         if detail:

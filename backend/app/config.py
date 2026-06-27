@@ -48,11 +48,11 @@ JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_HOURS: int = int(os.getenv("JWT_EXPIRE_HOURS", "168"))
 
 # ---- 管理员初始密码 ----
-INIT_ADMIN_PASSWORD: str = os.getenv("INIT_ADMIN_PASSWORD", "fantianmin123")
+INIT_ADMIN_PASSWORD: str = os.getenv("INIT_ADMIN_PASSWORD", "")
 
 # ---- 爱发电对接 ----
-IFDIAN_TOKEN: str = os.getenv("IFDIAN_TOKEN", "tu7VHceUgwM48dmv6AxsrjWRaFXTBbQJ")
-IFDIAN_USER_ID: str = os.getenv("IFDIAN_USER_ID", "7171534adb2511f0adbb52540025c377")
+IFDIAN_TOKEN: str = os.getenv("IFDIAN_TOKEN", "")
+IFDIAN_USER_ID: str = os.getenv("IFDIAN_USER_ID", "")
 
 # ---- 点数配置 ----
 DAILY_FREE_POINTS: int = int(os.getenv("DAILY_FREE_POINTS", "80"))

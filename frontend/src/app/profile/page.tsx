@@ -301,7 +301,7 @@ export default function ProfilePage() {
                     }}
                   >
                     {Number(log.change) > 0 ? "+" : ""}
-                    {String(log.change)}
+                    {log.change != null ? String(log.change) : ""}
                   </span>
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {log.created_at

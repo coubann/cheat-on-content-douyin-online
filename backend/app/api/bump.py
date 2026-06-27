@@ -20,7 +20,7 @@ async def bump_rubric(force: bool = False) -> ApiResponse:
     """
     try:
         result = await execute_bump(DATA_DIR, force=force)
-        return ApiResponse(data=result)
+        return ApiResponse(ok=True, data=result)
     except BumpError as e:
         return ApiResponse(
             ok=False,

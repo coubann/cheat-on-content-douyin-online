@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiFetch, sseFetch } from "@/lib/api";
 
@@ -155,7 +155,7 @@ function ViralityGauge({ score }: { score: number }) {
 
 export default function PredictPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="p-8 text-center" style={{color:"var(--text-muted)"}}>加载中...</div>}>
       <PredictPageInner />
     </Suspense>
   );
@@ -186,6 +186,9 @@ function PredictPageInner() {
     setExistingPrediction(null);
     setCurrentStep(0);
 
+    // 用于存储 fallback 定时器，组件卸载或 finally 中清理
+    const stepTimers: ReturnType<typeof setTimeout>[] = [];
+
     try {
       // Try SSE first for real-time progress
       const result = await sseFetch<{
@@ -212,12 +215,12 @@ function PredictPageInner() {
       console.warn("SSE failed, falling back to regular endpoint:", sseError);
 
       // Simulate step progress for the fallback
-      const stepTimers = [
+      stepTimers.push(
         setTimeout(() => setCurrentStep(1), 500),
         setTimeout(() => setCurrentStep(2), 3000),
         setTimeout(() => setCurrentStep(3), 8000),
         setTimeout(() => setCurrentStep(4), 12000),
-      ];
+      );
 
       try {
         const res = await apiFetch<{
@@ -228,8 +231,6 @@ function PredictPageInner() {
           method: "POST",
           body: JSON.stringify({ script_id: selectedScript }),
         });
-
-        stepTimers.forEach(clearTimeout);
 
         if (res.ok && res.data) {
           setCurrentStep(4);
@@ -246,11 +247,11 @@ function PredictPageInner() {
           setCurrentStep(-1);
         }
       } catch {
-        stepTimers.forEach(clearTimeout);
         setError("网络错误，请检查后端服务是否运行");
         setCurrentStep(-1);
       }
     } finally {
+      stepTimers.forEach(clearTimeout);
       setLoading(false);
     }
   };

@@ -104,9 +104,18 @@ export default function StatusPage() {
         <h1 className="text-2xl font-bold text-glow">状态看板</h1>
         <p className="mt-4" style={{ color: "var(--text-muted)" }}>
           项目未初始化，请先{" "}
-          <a href="/api/init" style={{ color: "#22c55e", textDecoration: "underline" }}>
+          <button
+            onClick={async () => {
+              await apiFetch("/api/init", {
+                method: "POST",
+                body: JSON.stringify({ platforms: ["douyin"] }),
+              });
+              loadStatus();
+            }}
+            style={{ color: "#22c55e", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit" }}
+          >
             初始化项目
-          </a>
+          </button>
         </p>
         <button
           className="btn-primary mt-4"
