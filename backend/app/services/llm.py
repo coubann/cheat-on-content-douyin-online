@@ -94,8 +94,33 @@ def _read_env(key: str, default: str = "") -> str:
 
 
 def _get_default_provider() -> str:
-    """获取默认 Provider"""
-    return _read_env("DEFAULT_LLM_PROVIDER", "deepseek")
+    """获取默认 Provider
+
+    优先级：
+    1. DEFAULT_LLM_PROVIDER 环境变量（如果有配置 API Key）
+    2. 遍历所有 provider，返回第一个有有效 API Key 的
+    3. 兜底返回 deepseek（会触发"未配置 API Key"报错）
+    """
+    configured = _get_any_configured_provider()
+    if configured:
+        return configured
+
+    preferred = _read_env("DEFAULT_LLM_PROVIDER", "")
+    if preferred:
+        api_key, _, _ = _get_provider_config(preferred)
+        if api_key:
+            return preferred
+
+    return "deepseek"
+
+
+def _get_any_configured_provider() -> str | None:
+    """检查是否有任何 provider 配置了有效 API Key，返回第一个可用的"""
+    for name in _PROVIDER_DEFAULTS:
+        api_key, _, _ = _get_provider_config(name)
+        if api_key:
+            return name
+    return None
 
 
 async def call_llm(
@@ -191,7 +216,13 @@ async def _call_provider(
     api_key, model, base_url = _get_provider_config(provider)
 
     if not api_key:
-        raise RuntimeError(f"未配置 {provider} 的 API Key")
+        # 检查是否所有 provider 都没配置，给出更明确的提示
+        any_configured = _get_any_configured_provider()
+        if any_configured:
+            raise RuntimeError(f"未配置 {provider} 的 API Key（已检测到 {any_configured} 有有效 Key，请在管理员后台切换默认 Provider）")
+        raise RuntimeError(
+            f"未配置任何 LLM 的 API Key。请在管理员后台 → LLM 配置 中配置至少一个 Provider（支持 deepseek / qwen / openrouter）"
+        )
 
     messages: list[dict[str, str]] = []
     if system:

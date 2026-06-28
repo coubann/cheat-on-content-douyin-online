@@ -327,6 +327,24 @@ async def get_me(authorization: str | None = Header(None)) -> ApiResponse:
                 error=ErrorDetail(code=AUTH_UNAUTHORIZED, message="用户不存在"),
             )
 
+        # 自动发放每日免费点数（用户无需重新登录）
+        today = date.today()
+        free_granted = 0
+        if user.free_points_date != today:
+            user.free_points_today = DAILY_FREE_POINTS
+            user.free_points_date = today
+            free_granted = DAILY_FREE_POINTS
+            # 会员加成
+            membership_bonus = {
+                "basic": 200,
+                "standard": 300,
+                "premium": 500,
+            }.get(user.membership_type or "none", 0)
+            if membership_bonus:
+                user.free_points_today += membership_bonus
+                free_granted += membership_bonus
+            await session.commit()
+
         # 获取 guide status
         from backend.app.models.guide_status import GuideStatus
         guide_result = await session.get(GuideStatus, user_id)
@@ -335,6 +353,7 @@ async def get_me(authorization: str | None = Header(None)) -> ApiResponse:
         return ApiResponse(ok=True, data={
             **user.to_dict(),
             "guide_step": guide_step,
+            "free_points_granted": free_granted,
         })
 
 

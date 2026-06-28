@@ -2,11 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖
+# 安装系统依赖（包含视频/音频处理工具）
 RUN apt-get update && apt-get install -y \
     gcc \
     default-libmysqlclient-dev \
     pkg-config \
+    ffmpeg \
+    yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 # 明确安装所有 Python 依赖（避免 pyproject.toml 的 Python 版本约束问题）
@@ -34,7 +36,8 @@ RUN pip install --no-cache-dir \
     aiosqlite \
     numpy \
     lightgbm \
-    joblib
+    joblib \
+    faster-whisper
 
 # 复制代码
 COPY backend/ backend/

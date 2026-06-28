@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiFetch, sseFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface DimensionScore {
   dimension: string;
@@ -184,74 +184,44 @@ function PredictPageInner() {
     setScoreResult(null);
     setViralityResult(null);
     setExistingPrediction(null);
-    setCurrentStep(0);
-
-    // 用于存储 fallback 定时器，组件卸载或 finally 中清理
-    const stepTimers: ReturnType<typeof setTimeout>[] = [];
+    setCurrentStep(1);
 
     try {
-      // Try SSE first for real-time progress
-      const result = await sseFetch<{
+      // Simulate step progress
+      const stepTimer = setTimeout(() => setCurrentStep(2), 2000);
+
+      const res = await apiFetch<{
         prediction_id: string;
         score: ScoreResult;
         virality: ViralityResult;
-      }>(
-        "/api/sse/predict",
-        { script_id: selectedScript },
-        (event) => {
-          // Map SSE phase to step index
-          const stepIndex = PHASE_TO_STEP[event.phase];
-          if (stepIndex !== undefined) {
-            setCurrentStep(stepIndex);
-          }
-        }
-      );
+      }>("/api/predict/full", {
+        method: "POST",
+        body: JSON.stringify({ script_id: selectedScript }),
+      });
 
-      setCurrentStep(4);
-      setScoreResult(result.score);
-      setViralityResult(result.virality);
-    } catch (sseError) {
-      // SSE failed — fall back to regular POST /api/predict/full
-      console.warn("SSE failed, falling back to regular endpoint:", sseError);
+      clearTimeout(stepTimer);
 
-      // Simulate step progress for the fallback
-      stepTimers.push(
-        setTimeout(() => setCurrentStep(1), 500),
-        setTimeout(() => setCurrentStep(2), 3000),
-        setTimeout(() => setCurrentStep(3), 8000),
-        setTimeout(() => setCurrentStep(4), 12000),
-      );
-
-      try {
-        const res = await apiFetch<{
-          prediction_id: string;
-          score: ScoreResult;
-          virality: ViralityResult;
-        }>("/api/predict/full", {
-          method: "POST",
-          body: JSON.stringify({ script_id: selectedScript }),
-        });
-
-        if (res.ok && res.data) {
-          setCurrentStep(4);
-          setScoreResult(res.data.score);
-          setViralityResult(res.data.virality);
+      if (res.ok && res.data) {
+        setCurrentStep(4);
+        setScoreResult(res.data.score);
+        setViralityResult(res.data.virality);
+      } else {
+        if (res.error?.code === "PREDICTION_EXISTS") {
+          const predictionId = res.error.message.match(/[\w_]+/)?.[0] || selectedScript;
+          setExistingPrediction(predictionId);
+          setError("该脚本已有预测结果，点击下方查看");
+        } else if (res.error?.code === "POINTS_INSUFFICIENT") {
+          setError(res.error?.message || "点数不足，请充值");
         } else {
-          if (res.error?.code === "PREDICTION_EXISTS") {
-            const predictionId = res.error.message.match(/[\w_]+/)?.[0] || selectedScript;
-            setExistingPrediction(predictionId);
-            setError("该脚本已有预测结果，点击下方查看");
-          } else {
-            setError(res.error?.message || "预测失败");
-          }
-          setCurrentStep(-1);
+          setError(res.error?.message || "预测失败");
         }
-      } catch {
-        setError("网络错误，请检查后端服务是否运行");
         setCurrentStep(-1);
       }
+    } catch (e) {
+      console.error("Predict error:", e);
+      setError("网络错误，请检查控制台详细信息");
+      setCurrentStep(-1);
     } finally {
-      stepTimers.forEach(clearTimeout);
       setLoading(false);
     }
   };

@@ -96,10 +96,10 @@ async def lifespan(app: FastAPI):
     await init_database()
     await task_queue.start()
 
-    # 启动每日免费点数清零定时任务
+    # 启动每日免费点数清零定时任务（北京时间 23:59:59）
     scheduler.add_job(
         reset_daily_free_points,
-        CronTrigger(hour=23, minute=59, second=59),
+        CronTrigger(hour=23, minute=59, second=59, timezone="Asia/Shanghai"),
         id="daily_free_points_reset",
         replace_existing=True,
     )

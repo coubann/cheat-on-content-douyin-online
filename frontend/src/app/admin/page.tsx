@@ -1,9 +1,48 @@
 "use client";
 
+import React from "react";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+
+// ---- Error Boundary ----
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("=== AdminPage Error ===");
+    console.error("Message:", error.message);
+    console.error("Stack:", error.stack);
+    console.error("Component Stack:", info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-6 max-w-2xl mx-auto">
+          <h2 className="text-lg font-bold text-red-500 mb-3">页面出错</h2>
+          <pre className="text-sm p-4 rounded overflow-auto max-h-60" style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)" }}>
+            {this.state.error.message}
+            {"\n\n"}
+            {this.state.error.stack}
+          </pre>
+          <button onClick={() => this.setState({ error: null })} className="btn-primary mt-4">
+            重试
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const MEMBERSHIP_OPTIONS = [
   { value: "none", label: "无会员" },
@@ -12,18 +51,169 @@ const MEMBERSHIP_OPTIONS = [
   { value: "premium", label: "Premium" },
 ];
 
-export default function AdminPage() {
+const STATUS_OPTIONS = [
+  { value: "", label: "全部" },
+  { value: "paid", label: "已支付" },
+  { value: "pending", label: "待支付" },
+];
+
+type TabKey = "users" | "llm" | "config" | "announcements" | "orders";
+
+interface PaginatedData<T> {
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  data: T[];
+}
+
+interface OrderUser {
+  id: number;
+  username: string;
+  email: string;
+}
+
+interface OrderItem {
+  id: number;
+  user_id: number;
+  out_trade_no: string;
+  ifdian_order_id: string | null;
+  tier: string;
+  amount: number;
+  amount_yuan: number;
+  points_granted: number;
+  status: string;
+  created_at: string | null;
+  paid_at: string | null;
+  user: OrderUser;
+}
+
+interface UserItem {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  points: number;
+  free_points_today: number;
+  membership_type: string;
+  checkin_streak: number;
+  invite_code: string | null;
+  disabled: boolean;
+  created_at: string | null;
+  last_login_at: string | null;
+  order_count: number;
+  paid_order_count: number;
+  total_spent: number;
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+  onGo,
+}: {
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onGo: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const pages: (number | "...")[] = [];
+  const start = Math.max(1, page - 2);
+  const end = Math.min(totalPages, page + 2);
+  if (start > 1) {
+    pages.push(1);
+    if (start > 2) pages.push("...");
+  }
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < totalPages) {
+    if (end < totalPages - 1) pages.push("...");
+    pages.push(totalPages);
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-1 pt-3">
+      <button
+        onClick={onPrev}
+        disabled={page <= 1}
+        className="px-3 py-1 text-xs rounded transition-all disabled:opacity-30"
+        style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+      >
+        ‹ 上一页
+      </button>
+      {pages.map((p, i) =>
+        p === "..." ? (
+          <span key={`ellipsis-${i}`} className="px-2 text-xs" style={{ color: "var(--text-muted)" }}>...</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onGo(p)}
+            className="px-3 py-1 text-xs rounded transition-all"
+            style={{
+              border: "1px solid var(--border)",
+              background: page === p ? "var(--accent)" : "transparent",
+              color: page === p ? "#fff" : "var(--text-secondary)",
+            }}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button
+        onClick={onNext}
+        disabled={page >= totalPages}
+        className="px-3 py-1 text-xs rounded transition-all disabled:opacity-30"
+        style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+      >
+        下一页 ›
+      </button>
+    </div>
+  );
+}
+
+export default function AdminPageWrapper() {
+  return (
+    <AdminErrorBoundary>
+      <AdminPage />
+    </AdminErrorBoundary>
+  );
+}
+
+function AdminPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<"users" | "llm" | "config" | "announcements" | "orders">("users");
-  const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
+  const [tab, setTab] = useState<TabKey>("users");
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [announcements, setAnnouncements] = useState<Array<Record<string, unknown>>>([]);
-  const [orders, setOrders] = useState<Array<Record<string, unknown>>>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
   const [configs, setConfigs] = useState<Record<string, string>>({});
   const [editingUser, setEditingUser] = useState<Record<string, unknown> | null>(null);
   const [editForm, setEditForm] = useState<Record<string, unknown>>({});
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [annForm, setAnnForm] = useState({ title: "", content: "", type: "info" });
+
+  // ---- Pagination & filters: orders ----
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersTotal, setOrdersTotal] = useState(0);
+  const [ordersTotalPages, setOrdersTotalPages] = useState(0);
+  const [ordersSearch, setOrdersSearch] = useState("");
+  const [ordersStatus, setOrdersStatus] = useState("");
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // ---- Pagination & filters: users ----
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersTotalPages, setUsersTotalPages] = useState(0);
+  const [usersSearch, setUsersSearch] = useState("");
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // ---- Expanded user row ----
+  const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  const [userOrders, setUserOrders] = useState<Record<number, OrderItem[]>>({});
+  const [userOrdersLoading, setUserOrdersLoading] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -39,21 +229,67 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!token) return;
-    loadUsers();
     loadAnnouncements();
-    loadOrders();
     loadConfig();
     loadLlmProviders();
   }, [token]);
 
+  // Load orders when page / filter / search changes
+  useEffect(() => {
+    if (!token) return;
+    loadOrders();
+  }, [token, ordersPage, ordersStatus, ordersSearch]);
+
+  // Load users when page / search changes
+  useEffect(() => {
+    if (!token) return;
+    loadUsers();
+  }, [token, usersPage, usersSearch]);
+
   const authHeaders = () => ({ Authorization: `Bearer ${token}` });
 
-  const loadUsers = async () => {
-    const res = await apiFetch<Array<Record<string, unknown>>>("/api/admin/users", {
-      headers: authHeaders(),
-    });
-    if (res.ok && res.data) setUsers(res.data);
-  };
+  const loadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(ordersPage));
+      params.set("per_page", "20");
+      if (ordersStatus) params.set("status", ordersStatus);
+      if (ordersSearch.trim()) params.set("search", ordersSearch.trim());
+
+      const res = await apiFetch<PaginatedData<OrderItem>>(`/api/admin/orders?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+      if (res.ok && res.data) {
+        setOrders(res.data.data);
+        setOrdersTotal(res.data.total);
+        setOrdersTotalPages(res.data.total_pages);
+      }
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [ordersPage, ordersStatus, ordersSearch, token]);
+
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(usersPage));
+      params.set("per_page", "20");
+      if (usersSearch.trim()) params.set("search", usersSearch.trim());
+
+      const res = await apiFetch<PaginatedData<UserItem>>(`/api/admin/users?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+      if (res.ok && res.data) {
+        setUsers(res.data.data);
+        setUsersTotal(res.data.total);
+        setUsersTotalPages(res.data.total_pages);
+      }
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [usersPage, usersSearch, token]);
 
   const loadAnnouncements = async () => {
     const res = await apiFetch<Array<Record<string, unknown>>>("/api/admin/announcements", {
@@ -62,18 +298,32 @@ export default function AdminPage() {
     if (res.ok && res.data) setAnnouncements(res.data);
   };
 
-  const loadOrders = async () => {
-    const res = await apiFetch<Array<Record<string, unknown>>>("/api/admin/orders", {
-      headers: authHeaders(),
-    });
-    if (res.ok && res.data) setOrders(res.data);
-  };
-
   const loadConfig = async () => {
     const res = await apiFetch<Record<string, string>>("/api/admin/config", {
       headers: authHeaders(),
     });
     if (res.ok && res.data) setConfigs(res.data);
+  };
+
+  const toggleUserOrders = async (userId: number) => {
+    if (expandedUserId === userId) {
+      setExpandedUserId(null);
+      return;
+    }
+    setExpandedUserId(userId);
+    if (userOrders[userId]) return; // already loaded
+
+    setUserOrdersLoading(true);
+    try {
+      const res = await apiFetch<OrderItem[]>(`/api/admin/users/${userId}/orders`, {
+        headers: authHeaders(),
+      });
+      if (res.ok && res.data) {
+        setUserOrders((prev) => ({ ...prev, [userId]: res.data as OrderItem[] }));
+      }
+    } finally {
+      setUserOrdersLoading(false);
+    }
   };
 
   const handleEditUser = (u: Record<string, unknown>) => {
@@ -199,6 +449,23 @@ export default function AdminPage() {
     return <div className="py-20 text-center" style={{ color: "var(--text-secondary)" }}>加载中...</div>;
   }
 
+  const statusBadge = (status: string) => {
+    if (status === "paid") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+          style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e" }}>
+          ✅ 已支付
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+        style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b" }}>
+        ⏳ 待支付
+      </span>
+    );
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">
@@ -216,7 +483,7 @@ export default function AdminPage() {
         ].map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key as typeof tab)}
+            onClick={() => setTab(t.key as TabKey)}
             className={`px-5 py-3 text-sm font-medium transition-all ${
               tab === t.key ? "tab-active" : "tab-inactive"
             }`}
@@ -229,27 +496,149 @@ export default function AdminPage() {
       {/* Tab: Users */}
       {tab === "users" && (
         <div className="space-y-3">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            共 {users.length} 个用户
-          </p>
-          {users.map((u) => (
-            <div key={u.id as number} className="card flex items-center justify-between">
-              <div className="text-sm space-y-1">
-                <p className="font-medium">{u.username as string}</p>
-                <p style={{ color: "var(--text-muted)" }}>{u.email as string}</p>
-                <div className="flex gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-                  <span>角色: {u.role as string}</span>
-                  <span>点数: {u.points as number}</span>
-                  <span>免费: {u.free_points_today as number}</span>
-                  <span>会员: {u.membership_type as string}</span>
-                  {Boolean(u.disabled) && <span style={{ color: "#ef4444" }}>已禁用</span>}
-                </div>
-              </div>
-              <button onClick={() => handleEditUser(u)} className="btn-ghost text-xs px-3 py-1">
-                编辑
-              </button>
-            </div>
-          ))}
+          {/* Toolbar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              className="input flex-1 min-w-[200px]"
+              placeholder="搜索用户名或邮箱..."
+              value={usersSearch}
+              onChange={(e) => {
+                setUsersSearch(e.target.value);
+                setUsersPage(1);
+              }}
+            />
+            <button onClick={() => loadUsers()} className="btn-ghost text-xs px-3 py-2">
+              刷新
+            </button>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              共 {usersTotal} 个用户
+            </span>
+          </div>
+
+          {/* Users table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>ID</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>用户名</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>邮箱</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>角色</th>
+                  <th className="text-right px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>点数</th>
+                  <th className="text-right px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>免费</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>会员</th>
+                  <th className="text-right px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>订单数</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>注册时间</th>
+                  <th className="text-center px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usersLoading ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-8 text-xs" style={{ color: "var(--text-muted)" }}>
+                      加载中...
+                    </td>
+                  </tr>
+                ) : (users || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-8 text-xs" style={{ color: "var(--text-muted)" }}>
+                      暂无用户
+                    </td>
+                  </tr>
+                ) : (
+                  (users || []).map((u) => (
+                    <Fragment key={u.id}>
+                      <tr
+                        onClick={() => toggleUserOrders(u.id)}
+                        className="cursor-pointer transition-all hover:opacity-80"
+                        style={{ borderBottom: "1px solid var(--border)" }}
+                      >
+                        <td className="px-3 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>{u.id}</td>
+                        <td className="px-3 py-3 font-medium">{u.username}</td>
+                        <td className="px-3 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>{u.email}</td>
+                        <td className="px-3 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            u.role === "admin"
+                              ? "bg-purple-500/15 text-purple-400"
+                              : "bg-blue-500/10 text-blue-400"
+                          }`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right">{u.points}</td>
+                        <td className="px-3 py-3 text-right" style={{ color: "var(--accent)" }}>{u.free_points_today}</td>
+                        <td className="px-3 py-3 text-xs">{u.membership_type === "none" ? "—" : u.membership_type}</td>
+                        <td className="px-3 py-3 text-right">{u.order_count}</td>
+                        <td className="px-3 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                          {u.created_at ? new Date(u.created_at).toLocaleDateString("zh-CN") : "—"}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEditUser(u as unknown as Record<string, unknown>); }}
+                            className="btn-ghost text-xs px-2 py-1"
+                          >
+                            编辑
+                          </button>
+                        </td>
+                      </tr>
+                      {/* Expanded user orders */}
+                      {expandedUserId === u.id && (
+                        <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td colSpan={10} className="px-6 py-3">
+                            <div className="text-xs space-y-2">
+                              <p className="font-medium" style={{ color: "var(--text-secondary)" }}>
+                                该用户的订单 {userOrdersLoading ? "加载中..." : `(${(userOrders[u.id] || []).length} 条)`}
+                              </p>
+                              {userOrders[u.id] && userOrders[u.id].length > 0 && (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+                                    <thead>
+                                      <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                        <th className="text-left px-2 py-1" style={{ color: "var(--text-muted)" }}>订单号</th>
+                                        <th className="text-left px-2 py-1" style={{ color: "var(--text-muted)" }}>档位</th>
+                                        <th className="text-right px-2 py-1" style={{ color: "var(--text-muted)" }}>金额</th>
+                                        <th className="text-right px-2 py-1" style={{ color: "var(--text-muted)" }}>点数</th>
+                                        <th className="text-left px-2 py-1" style={{ color: "var(--text-muted)" }}>状态</th>
+                                        <th className="text-left px-2 py-1" style={{ color: "var(--text-muted)" }}>时间</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {userOrders[u.id].map((order) => (
+                                        <tr key={order.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                                          <td className="px-2 py-1.5 font-mono">{order.out_trade_no}</td>
+                                          <td className="px-2 py-1.5">{order.tier}</td>
+                                          <td className="px-2 py-1.5 text-right">¥{order.amount_yuan.toFixed(2)}</td>
+                                          <td className="px-2 py-1.5 text-right">+{order.points_granted}</td>
+                                          <td className="px-2 py-1.5">{statusBadge(order.status)}</td>
+                                          <td className="px-2 py-1.5" style={{ color: "var(--text-muted)" }}>
+                                            {order.created_at ? new Date(order.created_at).toLocaleString("zh-CN") : "—"}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <Pagination
+            page={usersPage}
+            totalPages={usersTotalPages}
+            onPrev={() => setUsersPage((p) => Math.max(1, p - 1))}
+            onNext={() => setUsersPage((p) => Math.min(usersTotalPages, p + 1))}
+            onGo={(p) => setUsersPage(p)}
+          />
 
           {/* Edit user modal */}
           {editingUser && (
@@ -428,10 +817,10 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-2">
-            {announcements.length === 0 ? (
+            {(announcements || []).length === 0 ? (
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>暂无公告</p>
             ) : (
-              announcements.map((a) => (
+              (announcements || []).map((a) => (
                 <div key={a.id as number} className="card flex items-center justify-between">
                   <div className="text-sm space-y-1">
                     <p className="font-medium">{a.title as string}</p>
@@ -453,32 +842,100 @@ export default function AdminPage() {
 
       {/* Tab: Orders */}
       {tab === "orders" && (
-        <div className="space-y-2">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            共 {orders.length} 个订单
-          </p>
-          {orders.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>暂无订单</p>
-          ) : (
-            orders.map((o) => (
-              <div key={o.id as number} className="card flex items-center justify-between text-sm">
-                <div className="space-y-1">
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>用户ID:</span> {o.user_id as string}</p>
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>档位:</span> {o.tier as string}</p>
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>点数:</span> {o.points_granted as string}</p>
-                  <p><span className="text-xs" style={{ color: "var(--text-muted)" }}>金额:</span> ¥{(o.amount as number / 100).toFixed(2)}</p>
-                </div>
-                <div className="text-right space-y-1">
-                  <span className="badge" style={{
-                    background: o.status === "paid" ? "rgba(34,197,94,0.15)" : "rgba(245,158,11,0.15)",
-                    color: o.status === "paid" ? "#22c55e" : "#f59e0b",
-                  }}>
-                    {o.status === "paid" ? "已支付" : "待支付"}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
+        <div className="space-y-3">
+          {/* Toolbar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="text"
+              className="input flex-1 min-w-[200px]"
+              placeholder="搜索订单号、用户名或邮箱..."
+              value={ordersSearch}
+              onChange={(e) => {
+                setOrdersSearch(e.target.value);
+                setOrdersPage(1);
+              }}
+            />
+            <select
+              className="select"
+              value={ordersStatus}
+              onChange={(e) => {
+                setOrdersStatus(e.target.value);
+                setOrdersPage(1);
+              }}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <button onClick={() => loadOrders()} className="btn-ghost text-xs px-3 py-2">
+              刷新
+            </button>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              共 {ordersTotal} 条订单
+            </span>
+          </div>
+
+          {/* Orders table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>ID</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>订单号</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>用户</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>档位</th>
+                  <th className="text-right px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>金额</th>
+                  <th className="text-right px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>点数</th>
+                  <th className="text-center px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>状态</th>
+                  <th className="text-left px-3 py-2 font-medium text-xs" style={{ color: "var(--text-muted)" }}>支付时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ordersLoading ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-xs" style={{ color: "var(--text-muted)" }}>
+                      加载中...
+                    </td>
+                  </tr>
+                ) : (orders || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-xs" style={{ color: "var(--text-muted)" }}>
+                      暂无订单
+                    </td>
+                  </tr>
+                ) : (
+                  (orders || []).map((o) => (
+                    <tr key={o.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td className="px-3 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>{o.id}</td>
+                      <td className="px-3 py-3 font-mono text-xs">{o.out_trade_no}</td>
+                      <td className="px-3 py-3">
+                        <div className="text-xs">
+                          <span>{o.user.username}</span>
+                          <span className="ml-1" style={{ color: "var(--text-muted)" }}>({o.user.email})</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-xs">{o.tier}</td>
+                      <td className="px-3 py-3 text-right">¥{o.amount_yuan.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">+{o.points_granted}</td>
+                      <td className="px-3 py-3 text-center">{statusBadge(o.status)}</td>
+                      <td className="px-3 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {o.paid_at ? new Date(o.paid_at).toLocaleString("zh-CN") : "—"}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <Pagination
+            page={ordersPage}
+            totalPages={ordersTotalPages}
+            onPrev={() => setOrdersPage((p) => Math.max(1, p - 1))}
+            onNext={() => setOrdersPage((p) => Math.min(ordersTotalPages, p + 1))}
+            onGo={(p) => setOrdersPage(p)}
+          />
         </div>
       )}
     </div>

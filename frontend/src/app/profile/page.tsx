@@ -30,6 +30,12 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [pointsLog, setPointsLog] = useState<Array<Record<string, unknown>>>([]);
+  const [rechargeStatus, setRechargeStatus] = useState<{
+    loading: boolean;
+    error?: string;
+    polling: boolean;
+    success?: string;
+  }>({ loading: false, polling: false });
 
   useEffect(() => {
     if (!token) {
@@ -322,6 +328,21 @@ export default function ProfilePage() {
           充值点数永久有效，用完为止
         </p>
         <div className="grid grid-cols-3 gap-3">
+          {rechargeStatus.error && (
+            <p className="text-sm mb-3 col-span-3" style={{ color: "#ef4444" }}>
+              {rechargeStatus.error}
+            </p>
+          )}
+          {rechargeStatus.success && (
+            <p className="text-sm mb-3 col-span-3" style={{ color: "var(--accent)" }}>
+              ✅ {rechargeStatus.success}
+            </p>
+          )}
+          {rechargeStatus.polling && (
+            <p className="text-sm mb-3 col-span-3" style={{ color: "var(--text-secondary)" }}>
+              等待支付确认中... （请在新打开的页面完成支付）
+            </p>
+          )}
           {[
             { tier: "basic", label: "Basic ¥10", points: "1800 点", color: "#22C55E" },
             { tier: "standard", label: "Standard ¥18", points: "5000 点", color: "#F59E0B" },
@@ -329,24 +350,69 @@ export default function ProfilePage() {
           ].map((tier) => (
             <button
               key={tier.tier}
+              disabled={rechargeStatus.loading || rechargeStatus.polling}
               onClick={async () => {
-                const res = await apiFetch<{ pay_url: string; out_trade_no: string }>(
-                  "/api/membership/create-order",
-                  {
-                    method: "POST",
-                    body: JSON.stringify({ tier: tier.tier }),
-                    headers: { Authorization: `Bearer ${token}` },
+                setRechargeStatus({ loading: true, polling: false });
+                try {
+                  const res = await apiFetch<{
+                    pay_url: string;
+                    out_trade_no: string;
+                    order_id: number;
+                  }>(
+                    "/api/membership/create-order",
+                    {
+                      method: "POST",
+                      body: JSON.stringify({ tier: tier.tier }),
+                      headers: { Authorization: `Bearer ${token}` },
+                    }
+                  );
+                  if (res.ok && res.data) {
+                    setRechargeStatus({ loading: false, polling: true });
+                    window.open(res.data.pay_url, "_blank");
+
+                    // 开始轮询支付状态
+                    const pollInterval = setInterval(async () => {
+                      const pollRes = await apiFetch<{ status: string; points_granted: number }>(
+                        `/api/membership/check-order/${res.data!.order_id}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                      );
+                      if (pollRes.ok && pollRes.data?.status === "paid") {
+                        clearInterval(pollInterval);
+                        setRechargeStatus({
+                          loading: false,
+                          polling: false,
+                          success: `充值成功！获得 ${pollRes.data.points_granted} 点`,
+                        });
+                        // 刷新用户数据
+                        await refreshUser();
+                        // 刷新点数记录
+                        loadPointsLog();
+                      }
+                    }, 3000);
+
+                    // 5分钟超时停止轮询
+                    setTimeout(() => clearInterval(pollInterval), 300000);
+                  } else {
+                    setRechargeStatus({
+                      loading: false,
+                      polling: false,
+                      error: res.error?.message || "创建订单失败，请重试",
+                    });
                   }
-                );
-                if (res.ok && res.data) {
-                  window.open(res.data.pay_url, "_blank");
+                } catch (e) {
+                  setRechargeStatus({
+                    loading: false,
+                    polling: false,
+                    error: "网络错误，请稍后重试",
+                  });
                 }
               }}
               className="rounded-lg p-4 text-center transition-all hover:scale-105"
               style={{
                 background: `${tier.color}15`,
                 border: `1px solid ${tier.color}30`,
-                cursor: "pointer",
+                cursor: (rechargeStatus.loading || rechargeStatus.polling) ? "not-allowed" : "pointer",
+                opacity: (rechargeStatus.loading || rechargeStatus.polling) ? 0.5 : 1,
               }}
             >
               <p className="text-sm font-semibold" style={{ color: tier.color }}>

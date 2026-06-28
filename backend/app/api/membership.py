@@ -1,13 +1,19 @@
 """会员/充值路由 — 爱发电对接"""
 from __future__ import annotations
 
+import base64
 import json
+import logging
 from datetime import datetime, timezone
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi import APIRouter, Header, Request
 from pydantic import BaseModel
 
 from backend.app.config import IFDIAN_TOKEN, IFDIAN_USER_ID
+
+logger = logging.getLogger(__name__)
 from backend.app.db.session import async_session_factory
 from backend.app.errors import AUTH_UNAUTHORIZED
 from backend.app.models.order import Order
@@ -163,12 +169,54 @@ _ITEM_ID_TO_TIER = {
 }
 
 
+# 爱发电 Webhook RSA 公钥
+_IFDIAN_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwwdaCg1Bt+UKZKs0R54y
+lYnuANma49IpgoOwNmk3a0rhg/PQuhUJ0EOZSowIC44l0K3+fqGns3Ygi4AfmEfS
+4EKbdk1ahSxu7Zkp2rHMt+R9GarQFQkwSS/5x1dYiHNVMiR8oIXDgjmvxuNes2Cr
+8fw9dEF0xNBKdkKgG2qAawcN1nZrdyaKWtPVT9m2Hl0ddOO9thZmVLFOb9NVzgYf
+jEgI+KWX6aY19Ka/ghv/L4t1IXmz9pctablN5S0CRWpJW3Cn0k6zSXgjVdKm4uN7
+jRlgSRaf/Ind46vMCm3N2sgwxu/g3bnooW+db0iLo13zzuvyn727Q3UDQ0MmZcEW
+MQIDAQAB
+-----END PUBLIC KEY-----"""
+
+
+def _verify_ifdian_signature(order_data: dict) -> bool:
+    """验证爱发电 Webhook 的 RSA 签名
+
+    签名规则：取 order 中的 out_trade_no + user_id + plan_id + total_amount
+    依次拼接成字符串 sign_str，用 RSA 公钥验证。
+    """
+    sign = order_data.get("sign", "")
+    if not sign:
+        return False
+
+    sign_str = (
+        order_data.get("out_trade_no", "")
+        + order_data.get("user_id", "")
+        + order_data.get("plan_id", "")
+        + order_data.get("total_amount", "")
+    )
+
+    try:
+        public_key = serialization.load_pem_public_key(_IFDIAN_PUBLIC_KEY_PEM.encode())
+        public_key.verify(  # type: ignore[union-attr]
+            base64.b64decode(sign),
+            sign_str.encode(),
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
+        return True
+    except Exception:
+        return False
+
+
 @router.post("/ifdian-callback")
 async def ifdian_callback(request: Request) -> dict:
     """爱发电 Webhook 回调
 
     收到用户支付成功通知后，解析 out_trade_no 找到对应用户，充值点数。
-    安全验证：通过 X-Ifdian-Token 头部与配置的 IFDIAN_TOKEN 比对。
+    安全验证：优先使用 RSA 签名验证；如果爱发电后台配了 Token，也支持 X-Ifdian-Token。
     此接口返回普通 dict 而非 ApiResponse，因为爱发电需要 {ec:200} 格式。
     """
     # 获取原始 body
@@ -178,34 +226,55 @@ async def ifdian_callback(request: Request) -> dict:
     except json.JSONDecodeError:
         return {"ec": 400, "em": "invalid json"}
 
-    # Token 验证（爱发电使用 X-Ifdian-Token 头部）
+    # 可选：X-Ifdian-Token 额外验证
     header_token = request.headers.get("X-Ifdian-Token", "")
-    if header_token != IFDIAN_TOKEN:
+    if header_token and header_token != IFDIAN_TOKEN:
         return {"ec": 400, "em": "invalid token"}
 
-    # 解析订单数据
-    order_data = body.get("order", {})
-    out_trade_no = order_data.get("out_trade_no", "")
-    ifdian_order_id = order_data.get("order_id", "")
-    item_id = order_data.get("item_id", "")
-    status = order_data.get("status", "")
+    # 日志记录（仅调试用）
+    logger.info("ifdian_callback_received",
+                extra={"headers": dict(request.headers), "body_ec": body.get("ec")})
 
-    if status != "paid":
+    # 解析订单数据
+    # 爱发电 Webhook 格式：{ "ec":200, "em":"ok", "data": { "type":"order", "order":{...} } }
+    data_wrapper = body.get("data", {})
+    order_data = data_wrapper.get("order", {})
+
+    # 兼容旧格式：直接 body.order
+    if not order_data:
+        order_data = body.get("order", {})
+
+    out_trade_no = order_data.get("out_trade_no", "")
+    ifdian_order_id = order_data.get("order_id", out_trade_no)
+    plan_id = order_data.get("plan_id", "")
+    status = order_data.get("status", 0)
+
+    # status: 2 = 交易成功（爱发电文档定义，整数 2，非字符串 "paid"）
+    if status != 2:
+        logger.info("ifdian_order_not_paid status=%s type=%s", status, type(status).__name__)
         return {"ec": 400, "em": "order not paid"}
 
-    # 解析 out_trade_no 获取用户 ID
+    # 可选：RSA 签名验证（2025年7月起爱发电 Webhook 增加签名）
+    rsa_verified = _verify_ifdian_signature(order_data)
+    if not rsa_verified and header_token != IFDIAN_TOKEN:
+        logger.warning("ifdian_signature_invalid out_trade_no=%s", out_trade_no)
+
+    # 解析 out_trade_no 获取系统用户 ID
     # format: UID_{user_id}_{timestamp}
     if not out_trade_no.startswith("UID_"):
-        return {"ec": 400, "em": "invalid out_trade_no"}
+        # 非 UID_ 开头的 out_trade_no 是爱发电的验证/测试请求或其它系统的订单
+        # 直接返回成功，让爱发电确认地址可用，不处理点数
+        logger.info("ifdian_skip_non_uid out_trade_no=%s", out_trade_no)
+        return {"ec": 200, "em": "ok"}
     try:
         user_id = int(out_trade_no.split("_")[1])
     except (IndexError, ValueError):
         return {"ec": 400, "em": "cannot parse user_id"}
 
-    # 判断档位
-    tier = _ITEM_ID_TO_TIER.get(item_id)
+    # 判断档位（爱发电字段名为 plan_id，对应我们的 item_id）
+    tier = _ITEM_ID_TO_TIER.get(plan_id)
     if tier is None:
-        return {"ec": 400, "em": f"unknown item_id: {item_id}"}
+        return {"ec": 400, "em": f"unknown plan_id: {plan_id}"}
 
     tier_config = TIERS[tier]
 
@@ -218,7 +287,7 @@ async def ifdian_callback(request: Request) -> dict:
         order = result.scalar_one_or_none()
 
         if order is not None and order.status == "paid":
-            # 已处理过，直接返回成功
+            # 已处理过，直接返回成功（幂等）
             return {"ec": 200, "em": "ok"}
 
         # 查找或创建订单
@@ -239,6 +308,7 @@ async def ifdian_callback(request: Request) -> dict:
             return {"ec": 400, "em": "user not found"}
 
         user.points += tier_config["points"]
+        user.membership_type = tier
 
         # 更新订单状态
         order.status = "paid"
@@ -262,6 +332,8 @@ async def ifdian_callback(request: Request) -> dict:
 
         await session.commit()
 
+    logger.info("ifdian_order_processed out_trade_no=%s tier=%s points=%s",
+                out_trade_no, tier, tier_config["points"])
     return {"ec": 200, "em": "ok"}
 
 

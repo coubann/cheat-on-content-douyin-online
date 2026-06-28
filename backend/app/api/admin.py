@@ -1,10 +1,12 @@
 """管理员路由 — 用户管理、系统配置、LLM 配置等"""
 from __future__ import annotations
 
+import math
 from datetime import date
 
 from fastapi import APIRouter, Header
 from pydantic import BaseModel
+from sqlalchemy import case, func, select
 
 from backend.app.db.session import async_session_factory
 from backend.app.errors import AUTH_UNAUTHORIZED, INVALID_REQUEST
@@ -94,19 +96,74 @@ class AnnouncementUpdateRequest(BaseModel):
 
 
 @router.get("/users")
-async def list_users(authorization: str | None = Header(None)) -> ApiResponse:
-    """用户列表"""
+async def list_users(
+    authorization: str | None = Header(None),
+    page: int = 1,
+    per_page: int = 50,
+    search: str | None = None,
+    role: str | None = None,
+) -> ApiResponse:
+    """用户列表（分页、搜索、附带订单统计）"""
     uid, err = await _require_admin(authorization)
     if err:
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import select
-        result = await session.execute(
-            select(User).order_by(User.created_at.desc())
+        # 子查询：统计每个用户的订单
+        order_stats = (
+            select(
+                Order.user_id,
+                func.count(Order.id).label("order_count"),
+                func.count(case((Order.status == "paid", 1), else_=None)).label("paid_count"),
+                func.sum(case((Order.status == "paid", Order.amount), else_=0)).label("total_spent"),
+            )
+            .group_by(Order.user_id)
+            .subquery()
         )
-        users = result.scalars().all()
-        return ApiResponse(ok=True, data=[u.to_dict() for u in users])
+
+        query = (
+            select(User, order_stats.c.order_count, order_stats.c.paid_count, order_stats.c.total_spent)
+            .outerjoin(order_stats, User.id == order_stats.c.user_id)
+        )
+
+        if search:
+            query = query.where(
+                User.username.ilike(f"%{search}%") |
+                User.email.ilike(f"%{search}%")
+            )
+        if role:
+            query = query.where(User.role == role)
+
+        # 总数
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total_count = total_result.scalar() or 0
+
+        # 分页
+        query = query.order_by(User.created_at.desc())
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        result = await session.execute(query)
+        rows = result.all()
+
+        data = []
+        for row in rows:
+            user: User = row[0]
+            order_count: int = row.order_count or 0
+            paid_count: int = row.paid_count or 0
+            total_spent_cents: int = row.total_spent or 0
+            user_dict = user.to_dict()
+            user_dict["order_count"] = order_count
+            user_dict["paid_order_count"] = paid_count
+            user_dict["total_spent"] = round(total_spent_cents / 100, 2)
+            data.append(user_dict)
+
+        return ApiResponse(ok=True, data={
+            "total": total_count,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": math.ceil(total_count / per_page) if per_page > 0 else 0,
+            "data": data,
+        })
 
 
 @router.put("/users/{user_id}")
@@ -187,6 +244,46 @@ async def update_user(
         })
 
 
+@router.get("/users/{user_id}/orders")
+async def get_user_orders(
+    user_id: int,
+    authorization: str | None = Header(None),
+) -> ApiResponse:
+    """获取指定用户的所有订单"""
+    uid, err = await _require_admin(authorization)
+    if err:
+        return err
+
+    async with async_session_factory() as session:
+        # 先确认用户存在
+        user = await session.get(User, user_id)
+        if user is None:
+            return ApiResponse(
+                ok=False,
+                error=ErrorDetail(code="USER_NOT_FOUND", message="用户不存在"),
+            )
+
+        result = await session.execute(
+            select(Order)
+            .where(Order.user_id == user_id)
+            .order_by(Order.created_at.desc())
+        )
+        items = result.scalars().all()
+        return ApiResponse(ok=True, data=[{
+            "id": o.id,
+            "user_id": o.user_id,
+            "out_trade_no": o.out_trade_no,
+            "ifdian_order_id": o.ifdian_order_id,
+            "tier": o.tier,
+            "amount": o.amount,
+            "amount_yuan": o.amount / 100 if o.amount else 0,
+            "points_granted": o.points_granted,
+            "status": o.status,
+            "paid_at": o.paid_at.isoformat() if o.paid_at else None,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+        } for o in items])
+
+
 # ---- System Config ----
 
 
@@ -198,7 +295,6 @@ async def get_config(authorization: str | None = Header(None)) -> ApiResponse:
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import select
         result = await session.execute(select(SystemConfig))
         configs = result.scalars().all()
         return ApiResponse(ok=True, data={
@@ -239,7 +335,6 @@ async def list_announcements(authorization: str | None = Header(None)) -> ApiRes
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import select
         result = await session.execute(
             select(Announcement).order_by(Announcement.created_at.desc())
         )
@@ -336,29 +431,69 @@ async def delete_announcement(
 
 
 @router.get("/orders")
-async def list_orders(authorization: str | None = Header(None)) -> ApiResponse:
-    """订单列表"""
+async def list_orders(
+    authorization: str | None = Header(None),
+    page: int = 1,
+    per_page: int = 50,
+    status: str | None = None,
+    search: str | None = None,
+) -> ApiResponse:
+    """订单列表（分页、搜索、关联用户信息）"""
     uid, err = await _require_admin(authorization)
     if err:
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import select
-        result = await session.execute(
-            select(Order).order_by(Order.created_at.desc())
-        )
-        items = result.scalars().all()
-        return ApiResponse(ok=True, data=[{
-            "id": o.id,
-            "user_id": o.user_id,
-            "out_trade_no": o.out_trade_no,
-            "tier": o.tier,
-            "amount": o.amount,
-            "points_granted": o.points_granted,
-            "status": o.status,
-            "paid_at": o.paid_at.isoformat() if o.paid_at else None,
-            "created_at": o.created_at.isoformat() if o.created_at else None,
-        } for o in items])
+        query = select(Order, User).join(User, Order.user_id == User.id)
+
+        if status:
+            query = query.where(Order.status == status)
+        if search:
+            query = query.where(
+                Order.out_trade_no.ilike(f"%{search}%") |
+                User.username.ilike(f"%{search}%") |
+                User.email.ilike(f"%{search}%")
+            )
+
+        # 总数
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total_count = total_result.scalar() or 0
+
+        # 分页
+        query = query.order_by(Order.created_at.desc())
+        query = query.offset((page - 1) * per_page).limit(per_page)
+        result = await session.execute(query)
+        rows = result.all()  # list of tuples (Order, User)
+
+        data = []
+        for o, user in rows:
+            data.append({
+                "id": o.id,
+                "user_id": o.user_id,
+                "out_trade_no": o.out_trade_no,
+                "ifdian_order_id": o.ifdian_order_id,
+                "tier": o.tier,
+                "amount": o.amount,
+                "amount_yuan": o.amount / 100 if o.amount else 0,
+                "points_granted": o.points_granted,
+                "status": o.status,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "paid_at": o.paid_at.isoformat() if o.paid_at else None,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                },
+            })
+
+        return ApiResponse(ok=True, data={
+            "total": total_count,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": math.ceil(total_count / per_page) if per_page > 0 else 0,
+            "data": data,
+        })
 
 
 # ---- Statistics ----
@@ -372,7 +507,6 @@ async def get_user_stats(authorization: str | None = Header(None)) -> ApiRespons
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import func, select
         # 总用户数
         total = await session.execute(select(func.count(User.id)))
         total_users = total.scalar()
@@ -411,7 +545,6 @@ async def get_action_stats(authorization: str | None = Header(None)) -> ApiRespo
         return err
 
     async with async_session_factory() as session:
-        from sqlalchemy import func, select
         result = await session.execute(
             select(
                 UserAction.action,
