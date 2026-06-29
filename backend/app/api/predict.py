@@ -24,9 +24,10 @@ router = APIRouter()
 
 
 @router.get("/list")
-async def list_all_predictions() -> ApiResponse:
+async def list_all_predictions(request: Request) -> ApiResponse:
     """列出所有已预测的脚本"""
-    result = await list_predictions(DATA_DIR)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await list_predictions(DATA_DIR, user_id=user_id)
     return ApiResponse(ok=True, data={"predictions": result})
 
 
@@ -50,7 +51,9 @@ async def score_script_endpoint(req: ScoreRequest, request: Request) -> ApiRespo
             )
 
     try:
-        result = await score_script(DATA_DIR, req.script_id)
+        # 盲打分使用用户隔离的 data_dir
+        user_data_dir = DATA_DIR / str(user_id or 0)
+        result = await score_script(user_data_dir, req.script_id)
 
         # 扣减点数
         if user_id:
@@ -93,7 +96,7 @@ async def full_predict_endpoint(req: ScoreRequest, request: Request) -> ApiRespo
             )
 
     try:
-        result = await full_predict(DATA_DIR, req.script_id)
+        result = await full_predict(DATA_DIR, req.script_id, user_id=(user_id or 0))
 
         if user_id:
             await deduct_points(user_id, cost, "predict")
@@ -132,10 +135,11 @@ async def full_predict_endpoint(req: ScoreRequest, request: Request) -> ApiRespo
 
 
 @router.get("/{prediction_id}")
-async def get_prediction(prediction_id: str) -> ApiResponse:
+async def get_prediction(prediction_id: str, request: Request) -> ApiResponse:
     """预测详情 — 不扣点"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await get_prediction_detail(DATA_DIR, prediction_id)
+        result = await get_prediction_detail(DATA_DIR, prediction_id, user_id=user_id)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError:
         return ApiResponse(
@@ -163,7 +167,7 @@ async def optimize_script_endpoint(prediction_id: str, request: Request) -> ApiR
             )
 
     try:
-        result = await generate_optimized_script(DATA_DIR, prediction_id)
+        result = await generate_optimized_script(DATA_DIR, prediction_id, user_id=(user_id or 0))
 
         if user_id:
             await deduct_points(user_id, cost, "generate_copy")

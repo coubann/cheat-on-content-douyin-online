@@ -19,7 +19,7 @@ from backend.app.services.llm import call_llm_json
 logger = structlog.get_logger()
 
 
-async def build_persona(data_dir: Path) -> dict[str, Any]:
+async def build_persona(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """从已复盘数据构建受众画像
 
     Pre-conditions:
@@ -34,10 +34,11 @@ async def build_persona(data_dir: Path) -> dict[str, Any]:
       - LLM_CALL_FAILED
       - LLM_JSON_PARSE_FAILED
     """
-    logger.info("persona_build_start")
+    logger.info("persona_build_start", user_id=user_id)
 
-    # 收集所有评论数据
-    comments_data = _collect_comments(data_dir)
+    # 收集所有评论数据（从用户隔离的 predictions 目录）
+    user_data_dir = data_dir / str(user_id)
+    comments_data = _collect_comments(user_data_dir)
     if not comments_data:
         return {"status": "no_data", "message": "尚无评论数据，无法构建画像"}
 

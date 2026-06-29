@@ -9,6 +9,7 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 
 from backend.app.config import (
@@ -235,9 +236,9 @@ async def register(req: RegisterRequest) -> ApiResponse:
             user.free_points_date = today
             free_granted = DAILY_FREE_POINTS
 
-        # 生成邮箱验证 token
+        # 生成邮箱验证 token（SQLite 存不了带时区的时间）
         token_secret = secrets.token_urlsafe(48)
-        expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
         user.verification_token = token_secret
         user.verification_token_expires = expires
 
@@ -471,9 +472,11 @@ async def update_guide_status(body: dict, authorization: str | None = Header(Non
         })
 
 
-@router.get("/verify-email")
-async def verify_email(token: str) -> ApiResponse:
-    """验证邮箱"""
+@router.get("/verify-email", response_model=None)
+async def verify_email(token: str):
+    """验证邮箱 — 成功后跳转首页"""
+    from backend.app.config import VERIFICATION_BASE_URL
+
     async with async_session_factory() as session:
         from sqlalchemy import select
 
@@ -482,24 +485,17 @@ async def verify_email(token: str) -> ApiResponse:
         )
         user = result.scalar_one_or_none()
         if user is None:
-            return ApiResponse(
-                ok=False,
-                error=ErrorDetail(code="INVALID_TOKEN", message="验证链接无效"),
-            )
+            return RedirectResponse(url=f"{VERIFICATION_BASE_URL}/login?verify=fail&reason=invalid")
         if user.email_verified:
-            return ApiResponse(
-                ok=True,
-                data={"email_verified": True, "message": "邮箱已验证"},
-            )
-        now = datetime.now(timezone.utc)
+            return RedirectResponse(url=f"{VERIFICATION_BASE_URL}/?verify=already")
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if user.verification_token_expires and now > user.verification_token_expires:
-            return ApiResponse(
-                ok=False,
-                error=ErrorDetail(code="TOKEN_EXPIRED", message="验证链接已过期，请重新注册"),
-            )
+            return RedirectResponse(url=f"{VERIFICATION_BASE_URL}/login?verify=fail&reason=expired")
+
         user.email_verified = True
         user.verification_token = None
         user.verification_token_expires = None
         await session.commit()
 
-    return ApiResponse(ok=True, data={"email_verified": True, "message": "邮箱验证成功"})
+    return RedirectResponse(url=f"{VERIFICATION_BASE_URL}/?verify=success")

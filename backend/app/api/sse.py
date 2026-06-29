@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -66,8 +66,11 @@ class BumpSseRequest(BaseModel):
 # ---- Predict SSE ----
 
 
-async def _predict_sse_generator(script_id: str) -> Any:
+async def _predict_sse_generator(script_id: str, user_id: int = 0) -> Any:
     """SSE 生成器 — 逐步执行 predict 并发送进度
+
+    使用用户隔离路径：data/{user_id}/scripts/ 和 data/{user_id}/predictions/
+    系统级文件（.cheat-state.json, rubric_notes.md）保持共享。
 
     Pre-conditions:
       - scripts/<id>.md 存在
@@ -77,11 +80,13 @@ async def _predict_sse_generator(script_id: str) -> Any:
     Side effects:
       - LLM 调用、文件写入
     """
+    user_data_dir = DATA_DIR / str(user_id)
+
     try:
         # Phase 1: 读取脚本 + state
         yield _sse_event({"phase": "reading_script", "progress": 10})
 
-        script_path = DATA_DIR / "scripts" / f"{script_id}.md"
+        script_path = user_data_dir / "scripts" / f"{script_id}.md"
         if not script_path.exists():
             yield _sse_event({"phase": "error", "message": f"脚本不存在: {script_id}"})
             return
@@ -91,22 +96,22 @@ async def _predict_sse_generator(script_id: str) -> Any:
         script_content = read_file(script_path)
         script_hash = hashlib.sha256(script_content.encode()).hexdigest()[:12]
 
-        # Phase 2: 盲打分
+        # Phase 2: 盲打分（传入用户隔离目录）
         yield _sse_event({"phase": "blind_scoring", "progress": 30})
 
-        score_data = await blind_score(DATA_DIR, script_id)
+        score_data = await blind_score(user_data_dir, script_id)
         score_result = ScoreResult(**score_data)
 
-        # Phase 3: 爆款预测
+        # Phase 3: 爆款预测（传入用户隔离目录）
         yield _sse_event({"phase": "virality_predict", "progress": 60})
 
-        virality = await predict_virality(DATA_DIR, script_id, score_result, state)
+        virality = await predict_virality(user_data_dir, script_id, score_result, state)
 
         # Phase 4-5: 生成预测文件 + 落盘
         yield _sse_event({"phase": "writing_prediction", "progress": 90})
 
         prediction_id = f"{script_id}"
-        prediction_path = DATA_DIR / "predictions" / f"{prediction_id}.md"
+        prediction_path = user_data_dir / "predictions" / f"{prediction_id}.md"
 
         if prediction_path.exists():
             yield _sse_event({"phase": "error", "message": f"预测已存在: {prediction_id}"})
@@ -122,7 +127,7 @@ async def _predict_sse_generator(script_id: str) -> Any:
             state=state,
         )
 
-        (DATA_DIR / "predictions").mkdir(parents=True, exist_ok=True)
+        (user_data_dir / "predictions").mkdir(parents=True, exist_ok=True)
         safe_write(prediction_path, prediction_content)
 
         # Phase 6: 更新 state
@@ -142,13 +147,15 @@ async def _predict_sse_generator(script_id: str) -> Any:
         yield _sse_event({"phase": "complete", "progress": 100, "result": result})
 
     except Exception as e:
-        logger.error("sse_predict_error", script_id=script_id, error=str(e))
+        logger.error("sse_predict_error", script_id=script_id, user_id=user_id, error=str(e))
         yield _sse_event({"phase": "error", "message": str(e)})
 
 
 @router.post("/predict")
-async def predict_sse(req: PredictSseRequest) -> StreamingResponse:
+async def predict_sse(req: PredictSseRequest, request: Request) -> StreamingResponse:
     """启动完整预测并流式返回进度
+
+    支持用户数据隔离，从 request.state.user_id 获取当前用户。
 
     Pre-conditions:
       - scripts/<id>.md 存在
@@ -157,8 +164,9 @@ async def predict_sse(req: PredictSseRequest) -> StreamingResponse:
     Side effects:
       - LLM 调用、文件写入
     """
+    user_id = getattr(request.state, "user_id", 0)
     return StreamingResponse(
-        _predict_sse_generator(req.script_id),
+        _predict_sse_generator(req.script_id, user_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

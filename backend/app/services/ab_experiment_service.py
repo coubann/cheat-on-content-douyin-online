@@ -123,7 +123,7 @@ async def get_experiment(data_dir: Path, experiment_id: str) -> dict[str, Any] |
     return json.loads(read_file(exp_path))
 
 
-async def predict_both(data_dir: Path, experiment_id: str) -> dict[str, Any]:
+async def predict_both(data_dir: Path, experiment_id: str, user_id: int = 0) -> dict[str, Any]:
     """对实验中的两个脚本分别运行预测
 
     Pre-conditions:
@@ -148,11 +148,11 @@ async def predict_both(data_dir: Path, experiment_id: str) -> dict[str, Any]:
     if exp["status"] != "created":
         raise ValueError(f"{INVALID_REQUEST}: 实验状态不是 created，当前状态: {exp['status']}")
 
-    logger.info("experiment_predict_start", experiment_id=experiment_id)
+    logger.info("experiment_predict_start", experiment_id=experiment_id, user_id=user_id)
 
     # 预测脚本 A
     try:
-        prediction_a = await full_predict(data_dir, exp["script_a_id"])
+        prediction_a = await full_predict(data_dir, exp["script_a_id"], user_id=user_id)
     except FileExistsError:
         # 预测已存在，读取已有预测
         prediction_a = {"script_id": exp["script_a_id"], "note": "prediction_already_exists"}
@@ -162,7 +162,7 @@ async def predict_both(data_dir: Path, experiment_id: str) -> dict[str, Any]:
 
     # 预测脚本 B
     try:
-        prediction_b = await full_predict(data_dir, exp["script_b_id"])
+        prediction_b = await full_predict(data_dir, exp["script_b_id"], user_id=user_id)
     except FileExistsError:
         prediction_b = {"script_id": exp["script_b_id"], "note": "prediction_already_exists"}
     except Exception as e:

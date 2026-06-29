@@ -27,7 +27,7 @@ async def build_persona_endpoint(request: Request) -> ApiResponse:
                 error=ErrorDetail(code=POINTS_INSUFFICIENT, message=msg),
             )
 
-    result = await build_persona(DATA_DIR)
+    result = await build_persona(DATA_DIR, user_id=(user_id or 0))
     # 即使 build_persona 内部调 LLM 失败，也不重复扣点（因为没成功）
     # 但 build_persona 没有捕获 LLM 异常，需要额外处理
     if result.get("status") == "no_data":

@@ -14,7 +14,7 @@ from backend.app.services.file_io import read_file, safe_write
 logger = structlog.get_logger()
 
 
-async def list_scripts(data_dir: Path) -> list[dict[str, Any]]:
+async def list_scripts(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """列出所有草稿
 
     Pre-conditions:
@@ -24,7 +24,7 @@ async def list_scripts(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    scripts_dir = data_dir / "scripts"
+    scripts_dir = data_dir / str(user_id) / "scripts"
     if not scripts_dir.exists():
         return []
 
@@ -41,7 +41,7 @@ async def list_scripts(data_dir: Path) -> list[dict[str, Any]]:
     return scripts
 
 
-async def create_script(data_dir: Path, title: str, content: str) -> dict[str, Any]:
+async def create_script(data_dir: Path, user_id: int, title: str, content: str) -> dict[str, Any]:
     """新建草稿
 
     Pre-conditions:
@@ -57,7 +57,7 @@ async def create_script(data_dir: Path, title: str, content: str) -> dict[str, A
     """
     from backend.app.errors import PREDICTION_EXISTS
 
-    scripts_dir = data_dir / "scripts"
+    scripts_dir = data_dir / str(user_id) / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
 
     # 生成 ID：日期 + hash 前8位
@@ -80,11 +80,11 @@ async def create_script(data_dir: Path, title: str, content: str) -> dict[str, A
 """
     safe_write(script_path, full_content)
 
-    logger.info("script_created", script_id=script_id)
+    logger.info("script_created", script_id=script_id, user_id=user_id)
     return {"id": script_id, "title": title, "path": str(script_path)}
 
 
-async def get_script(data_dir: Path, script_id: str) -> dict[str, Any]:
+async def get_script(data_dir: Path, script_id: str, user_id: int = 0) -> dict[str, Any]:
     """获取草稿详情
 
     Pre-conditions:
@@ -96,7 +96,7 @@ async def get_script(data_dir: Path, script_id: str) -> dict[str, Any]:
     Error codes:
       - SCRIPT_NOT_FOUND: 脚本不存在
     """
-    script_path = data_dir / "scripts" / f"{script_id}.md"
+    script_path = data_dir / str(user_id) / "scripts" / f"{script_id}.md"
     content = read_file(script_path)
     stat = script_path.stat()
 
@@ -108,7 +108,7 @@ async def get_script(data_dir: Path, script_id: str) -> dict[str, Any]:
     }
 
 
-async def update_script(data_dir: Path, script_id: str, content: str) -> dict[str, Any]:
+async def update_script(data_dir: Path, script_id: str, content: str, user_id: int = 0) -> dict[str, Any]:
     """更新草稿
 
     Pre-conditions:
@@ -120,16 +120,16 @@ async def update_script(data_dir: Path, script_id: str, content: str) -> dict[st
     Error codes:
       - SCRIPT_NOT_FOUND: 脚本不存在
     """
-    script_path = data_dir / "scripts" / f"{script_id}.md"
+    script_path = data_dir / str(user_id) / "scripts" / f"{script_id}.md"
     # 验证文件存在
     read_file(script_path)
     safe_write(script_path, content)
 
-    logger.info("script_updated", script_id=script_id)
+    logger.info("script_updated", script_id=script_id, user_id=user_id)
     return {"id": script_id, "updated": True}
 
 
-async def delete_script(data_dir: Path, script_id: str) -> dict[str, Any]:
+async def delete_script(data_dir: Path, script_id: str, user_id: int = 0) -> dict[str, Any]:
     """删除草稿
 
     Pre-conditions:
@@ -143,10 +143,10 @@ async def delete_script(data_dir: Path, script_id: str) -> dict[str, Any]:
     """
     from backend.app.errors import SCRIPT_NOT_FOUND
 
-    script_path = data_dir / "scripts" / f"{script_id}.md"
+    script_path = data_dir / str(user_id) / "scripts" / f"{script_id}.md"
     if not script_path.exists():
         raise FileNotFoundError(f"{SCRIPT_NOT_FOUND}: {script_id}")
 
     script_path.unlink()
-    logger.info("script_deleted", script_id=script_id)
+    logger.info("script_deleted", script_id=script_id, user_id=user_id)
     return {"id": script_id, "deleted": True}

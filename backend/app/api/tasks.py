@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from backend.app.models.response import ApiResponse, ErrorDetail
@@ -19,7 +19,7 @@ class SubmitTaskRequest(BaseModel):
 
 
 @router.post("")
-async def submit_task(req: SubmitTaskRequest) -> ApiResponse:
+async def submit_task(req: SubmitTaskRequest, request: Request) -> ApiResponse:
     """提交新任务
 
     Pre-conditions:
@@ -49,6 +49,10 @@ async def submit_task(req: SubmitTaskRequest) -> ApiResponse:
                 suggested_action="请提供 params.script_id",
             ),
         )
+
+    # 注入当前用户 ID 到任务参数
+    user_id = getattr(request.state, "user_id", 0)
+    req.params["user_id"] = user_id
 
     task_id = task_queue.submit(req.task_type, req.params)
     return ApiResponse(ok=True, data={"task_id": task_id, "task_type": req.task_type})

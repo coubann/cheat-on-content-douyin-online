@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from backend.app.config import DATA_DIR
@@ -37,24 +37,27 @@ class UpdateScriptRequest(BaseModel):
 
 
 @router.get("")
-async def list_scripts() -> ApiResponse:
+async def list_scripts(request: Request) -> ApiResponse:
     """列出所有草稿"""
-    scripts = await svc_list(DATA_DIR)
+    user_id = getattr(request.state, "user_id", 0)
+    scripts = await svc_list(DATA_DIR, user_id=user_id)
     return ApiResponse(ok=True, data={"scripts": scripts})
 
 
 @router.post("")
-async def create_script(req: CreateScriptRequest) -> ApiResponse:
+async def create_script(req: CreateScriptRequest, request: Request) -> ApiResponse:
     """新建草稿"""
-    result = await svc_create(DATA_DIR, req.title, req.content)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await svc_create(DATA_DIR, user_id, req.title, req.content)
     return ApiResponse(ok=True, data=result)
 
 
 @router.get("/{script_id}")
-async def get_script(script_id: str) -> ApiResponse:
+async def get_script(script_id: str, request: Request) -> ApiResponse:
     """草稿详情"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await svc_get(DATA_DIR, script_id)
+        result = await svc_get(DATA_DIR, script_id, user_id=user_id)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError:
         return ApiResponse(
@@ -68,10 +71,11 @@ async def get_script(script_id: str) -> ApiResponse:
 
 
 @router.put("/{script_id}")
-async def update_script(script_id: str, req: UpdateScriptRequest) -> ApiResponse:
+async def update_script(script_id: str, req: UpdateScriptRequest, request: Request) -> ApiResponse:
     """更新草稿"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await svc_update(DATA_DIR, script_id, req.content)
+        result = await svc_update(DATA_DIR, script_id, req.content, user_id=user_id)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError:
         return ApiResponse(
@@ -85,10 +89,11 @@ async def update_script(script_id: str, req: UpdateScriptRequest) -> ApiResponse
 
 
 @router.delete("/{script_id}")
-async def delete_script(script_id: str) -> ApiResponse:
+async def delete_script(script_id: str, request: Request) -> ApiResponse:
     """删除草稿"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await svc_delete(DATA_DIR, script_id)
+        result = await svc_delete(DATA_DIR, script_id, user_id=user_id)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError:
         return ApiResponse(

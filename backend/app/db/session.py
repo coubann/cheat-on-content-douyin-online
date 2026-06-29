@@ -1,6 +1,8 @@
 """SQLAlchemy 异步会话管理"""
 from __future__ import annotations
 
+from pathlib import Path
+
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -70,3 +72,22 @@ async def create_tables() -> None:
         except Exception:
             pass
     logger.info("database_tables_created", url=DATABASE_URL)
+
+
+async def migrate_old_data(data_dir: Path) -> None:
+    """将旧 data/scripts/* 迁移到 data/0/scripts/*"""
+    import shutil
+
+    for subdir in ["scripts", "predictions", "videos", "samples"]:
+        old_dir = data_dir / subdir
+        if old_dir.exists():
+            target = data_dir / "0" / subdir
+            target.mkdir(parents=True, exist_ok=True)
+            for f in old_dir.glob("*"):
+                if f.is_file():
+                    shutil.move(str(f), str(target / f.name))
+            try:
+                old_dir.rmdir()
+            except OSError:
+                pass
+    logger.info("old_data_migrated", data_dir=str(data_dir))

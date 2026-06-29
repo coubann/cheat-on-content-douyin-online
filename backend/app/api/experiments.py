@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from backend.app.config import DATA_DIR
@@ -31,7 +31,7 @@ class CompleteExperimentRequest(BaseModel):
 
 
 @router.post("")
-async def create_experiment_endpoint(req: CreateExperimentRequest) -> ApiResponse:
+async def create_experiment_endpoint(req: CreateExperimentRequest, request: Request) -> ApiResponse:
     """创建 A/B 实验"""
     try:
         result = await create_experiment(
@@ -61,10 +61,11 @@ async def get_experiment_endpoint(experiment_id: str) -> ApiResponse:
 
 
 @router.post("/{experiment_id}/predict")
-async def predict_both_endpoint(experiment_id: str) -> ApiResponse:
+async def predict_both_endpoint(experiment_id: str, request: Request) -> ApiResponse:
     """对实验的两个脚本分别运行预测"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await predict_both(DATA_DIR, experiment_id)
+        result = await predict_both(DATA_DIR, experiment_id, user_id=user_id)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError as e:
         return ApiResponse(ok=False, error=ErrorDetail(code="EXPERIMENT_NOT_FOUND", message=str(e)))

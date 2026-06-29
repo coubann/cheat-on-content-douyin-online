@@ -222,7 +222,8 @@ class TaskQueue:
         if info.task_type == "predict":
             from backend.app.services.predict_service import full_predict
 
-            return await full_predict(DATA_DIR, info.params["script_id"])
+            user_id = info.params.get("user_id", 0)
+            return await full_predict(DATA_DIR, info.params["script_id"], user_id=user_id)
         elif info.task_type == "bump":
             from backend.app.services.bump_service import execute_bump
 

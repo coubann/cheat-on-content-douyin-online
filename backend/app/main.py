@@ -43,8 +43,9 @@ from backend.app.api import (
     tasks,
     virality,
 )
-from backend.app.config import APP_ENV, LOG_LEVEL
+from backend.app.config import APP_ENV, DATA_DIR, LOG_LEVEL
 from backend.app.db.init_db import init_database
+from backend.app.db.session import migrate_old_data
 from backend.app.errors import LLM_CALL_FAILED
 from backend.app.middleware.auth import AuthMiddleware
 from backend.app.services.llm import LLMCallError
@@ -94,6 +95,8 @@ async def lifespan(app: FastAPI):
     logger.info("app_start", env=APP_ENV)
     # 初始化数据库（建表 + 创建 admin）
     await init_database()
+    # 数据迁移：将旧 data/* 迁移到 data/0/*（用户隔离）
+    await migrate_old_data(DATA_DIR)
     await task_queue.start()
 
     # 启动每日免费点数清零定时任务（北京时间 23:59:59）

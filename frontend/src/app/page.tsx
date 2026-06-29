@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
@@ -45,8 +46,23 @@ export default function HomePage() {
   const [currentProvider, setCurrentProvider] = useState<string>("");
   const [switching, setSwitching] = useState(false);
   const [notifSummary, setNotifSummary] = useState<NotificationSummary | null>(null);
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
+  // 邮箱验证结果提示
   useEffect(() => {
+    const v = searchParams.get("verify");
+    if (v === "success") setVerifyMsg("✅ 邮箱验证成功！");
+    else if (v === "already") setVerifyMsg("📧 该邮箱已验证过");
+    else if (v === "fail") setVerifyMsg("❌ 验证链接无效或已过期");
+    if (v) {
+      // 3 秒后清除提示（并去掉 URL 参数）
+      setTimeout(() => {
+        setVerifyMsg(null);
+        window.history.replaceState({}, "", "/");
+      }, 5000);
+    }
+  }, [searchParams]);
     apiFetch<StatusData>("/api/status").then((res) => {
       if (res.ok && res.data) setStatus(res.data);
     });
@@ -96,6 +112,13 @@ export default function HomePage() {
   return (
     <div>
       <AnnouncementBanner />
+
+      {verifyMsg && (
+        <div className="mb-4 rounded-lg px-4 py-3 text-sm font-medium text-center" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22C55E" }}>
+          {verifyMsg}
+        </div>
+      )}
+
       <GuideCard onClose={() => {}} />
       {/* Header */}
       <div className="mb-8">

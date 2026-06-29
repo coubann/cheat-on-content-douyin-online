@@ -38,7 +38,7 @@ from backend.app.services.predictor import predict_virality
 logger = structlog.get_logger()
 
 
-async def full_predict(data_dir: Path, script_id: str) -> dict[str, Any]:
+async def full_predict(data_dir: Path, script_id: str, user_id: int = 0) -> dict[str, Any]:
     """完整预测流程 — 7 Phase
 
     Pre-conditions:
@@ -57,10 +57,15 @@ async def full_predict(data_dir: Path, script_id: str) -> dict[str, Any]:
     """
     from backend.app.errors import PREDICTION_EXISTS, SCRIPT_NOT_FOUND
 
-    logger.info("predict_start", script_id=script_id)
+    logger.info("predict_start", script_id=script_id, user_id=user_id)
+
+    # 用户隔离路径
+    user_data_dir = data_dir / str(user_id)
+    scripts_dir = user_data_dir / "scripts"
+    predictions_dir = user_data_dir / "predictions"
 
     # Phase 1: 读取脚本 + state
-    script_path = data_dir / "scripts" / f"{script_id}.md"
+    script_path = scripts_dir / f"{script_id}.md"
     if not script_path.exists():
         raise FileNotFoundError(f"{SCRIPT_NOT_FOUND}: {script_id}")
 
@@ -69,22 +74,22 @@ async def full_predict(data_dir: Path, script_id: str) -> dict[str, Any]:
     script_content = read_file(script_path)
     script_hash = hashlib.sha256(script_content.encode()).hexdigest()[:12]
 
-    logger.info("predict_phase1_complete", script_hash=script_hash)
+    logger.info("predict_phase1_complete", script_hash=script_hash, user_id=user_id)
 
-    # Phase 2: 盲打分
-    score_data = await blind_score(data_dir, script_id)
+    # Phase 2: 盲打分（传入 user_data_dir 以读取用户隔离的脚本）
+    score_data = await blind_score(user_data_dir, script_id)
     score_result = ScoreResult(**score_data)
 
-    logger.info("predict_score_returned", composite=score_result.composite)
+    logger.info("predict_score_returned", composite=score_result.composite, user_id=user_id)
 
-    # Phase 3: 爆款预测
-    virality = await predict_virality(data_dir, script_id, score_result, state)
+    # Phase 3: 爆款预测（传入 user_data_dir 以读取用户隔离的校准池）
+    virality = await predict_virality(user_data_dir, script_id, score_result, state)
 
-    logger.info("predict_virality_returned", virality_score=virality["virality_score"])
+    logger.info("predict_virality_returned", virality_score=virality["virality_score"], user_id=user_id)
 
     # Phase 4: 生成预测文件
     prediction_id = f"{script_id}"
-    prediction_path = data_dir / "predictions" / f"{prediction_id}.md"
+    prediction_path = predictions_dir / f"{prediction_id}.md"
 
     if prediction_path.exists():
         raise FileExistsError(f"{PREDICTION_EXISTS}: 预测已存在 {prediction_id}")
@@ -98,12 +103,12 @@ async def full_predict(data_dir: Path, script_id: str) -> dict[str, Any]:
     )
 
     # Phase 5: 落盘
-    (data_dir / "predictions").mkdir(parents=True, exist_ok=True)
+    predictions_dir.mkdir(parents=True, exist_ok=True)
     safe_write(prediction_path, prediction_content)
 
-    logger.info("predict_written", prediction_id=prediction_id)
+    logger.info("predict_written", prediction_id=prediction_id, user_id=user_id)
 
-    # Phase 6: 更新 state
+    # Phase 6: 更新 state（共享的 .cheat-state.json）
     state.in_progress_session = prediction_id
     safe_write(state_path, state.model_dump_json(indent=2))
 
@@ -117,11 +122,11 @@ async def full_predict(data_dir: Path, script_id: str) -> dict[str, Any]:
         "prediction_path": str(prediction_path),
     }
 
-    logger.info("predict_complete", prediction_id=prediction_id)
+    logger.info("predict_complete", prediction_id=prediction_id, user_id=user_id)
     return result
 
 
-async def list_predictions(data_dir: Path) -> list[dict[str, Any]]:
+async def list_predictions(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """列出所有已预测的脚本
 
     Pre-conditions:
@@ -131,7 +136,7 @@ async def list_predictions(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
 
@@ -185,7 +190,7 @@ async def list_predictions(data_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
-async def get_prediction_detail(data_dir: Path, prediction_id: str) -> dict[str, Any]:
+async def get_prediction_detail(data_dir: Path, prediction_id: str, user_id: int = 0) -> dict[str, Any]:
     """获取预测详情
 
     Pre-conditions:
@@ -199,10 +204,11 @@ async def get_prediction_detail(data_dir: Path, prediction_id: str) -> dict[str,
     """
     from backend.app.errors import PREDICTION_NOT_FOUND
 
-    path = data_dir / "predictions" / f"{prediction_id}.md"
+    preds_dir = data_dir / str(user_id) / "predictions"
+    path = preds_dir / f"{prediction_id}.md"
     if not path.exists():
         # 尝试带 script_id 前缀
-        candidates = list((data_dir / "predictions").glob(f"*{prediction_id}*.md"))
+        candidates = list(preds_dir.glob(f"*{prediction_id}*.md"))
         if not candidates:
             raise FileNotFoundError(f"{PREDICTION_NOT_FOUND}: {prediction_id}")
         path = candidates[0]
@@ -218,7 +224,7 @@ async def get_prediction_detail(data_dir: Path, prediction_id: str) -> dict[str,
     }
 
 
-async def generate_optimized_script(data_dir: Path, prediction_id: str) -> dict[str, Any]:
+async def generate_optimized_script(data_dir: Path, prediction_id: str, user_id: int = 0) -> dict[str, Any]:
     """基于预测结果生成最优文案/脚本
 
     读取原始脚本 + 预测维度评分 + 改稿建议，
@@ -232,19 +238,23 @@ async def generate_optimized_script(data_dir: Path, prediction_id: str) -> dict[
     Side effects:
       - LLM 调用
     """
+    user_data_dir = data_dir / str(user_id)
+    preds_dir = user_data_dir / "predictions"
+    scripts_dir = user_data_dir / "scripts"
+
     # 1. 读取预测文件
-    pred_path = data_dir / "predictions" / f"{prediction_id}.md"
+    pred_path = preds_dir / f"{prediction_id}.md"
     if not pred_path.exists():
-        candidates = list((data_dir / "predictions").glob(f"*{prediction_id}*.md"))
+        candidates = list(preds_dir.glob(f"*{prediction_id}*.md"))
         if not candidates:
             raise FileNotFoundError(f"预测不存在: {prediction_id}")
         pred_path = candidates[0]
     pred_content = read_file(pred_path)
 
     # 2. 读取原始脚本
-    script_path = data_dir / "scripts" / f"{prediction_id}.md"
+    script_path = scripts_dir / f"{prediction_id}.md"
     if not script_path.exists():
-        candidates = list((data_dir / "scripts").glob(f"*{prediction_id}*.md"))
+        candidates = list(scripts_dir.glob(f"*{prediction_id}*.md"))
         if not candidates:
             raise FileNotFoundError(f"脚本不存在: {prediction_id}")
         script_path = candidates[0]
