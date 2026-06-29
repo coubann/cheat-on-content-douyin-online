@@ -113,6 +113,18 @@ export default function HomePage() {
     <div>
       <AnnouncementBanner />
 
+      {user && !user.email_verified && (
+        <div className="mb-4 rounded-lg px-5 py-4 text-sm" style={{ background: "rgba(239,68,68,0.12)", border: "2px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⚠️</span>
+            <div className="flex-1">
+              <p className="font-semibold text-base">邮箱尚未验证</p>
+              <p className="mt-1" style={{ color: "rgba(239,68,68,0.75)" }}>请查收注册邮箱中的验证邮件，点击链接完成验证后即可使用全部功能。</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {verifyMsg && (
         <div className="mb-4 rounded-lg px-4 py-3 text-sm font-medium text-center" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22C55E" }}>
           {verifyMsg}
