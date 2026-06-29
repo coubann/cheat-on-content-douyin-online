@@ -4,6 +4,7 @@ from __future__ import annotations
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text
 
 from backend.app.config import DATABASE_URL
 
@@ -36,7 +37,7 @@ async def get_db() -> AsyncSession:  # type: ignore
 
 
 async def create_tables() -> None:
-    """创建所有表"""
+    """创建所有表 + 迁移新增字段"""
     from backend.app.models import user  # noqa: F401
     from backend.app.models import points_log  # noqa: F401
     from backend.app.models import order  # noqa: F401
@@ -49,4 +50,23 @@ async def create_tables() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # SQLite 不会自动添加新字段，需要手动 ALTER TABLE
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0"
+            ))
+        except Exception:
+            pass  # 字段已存在
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN verification_token VARCHAR(100)"
+            ))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text(
+                "ALTER TABLE users ADD COLUMN verification_token_expires DATETIME"
+            ))
+        except Exception:
+            pass
     logger.info("database_tables_created", url=DATABASE_URL)

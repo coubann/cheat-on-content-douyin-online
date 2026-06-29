@@ -11,6 +11,16 @@ from starlette.responses import JSONResponse
 
 from backend.app.services.jwt_service import get_user_id_from_token
 
+# 无需邮箱验证即可访问的路径
+EMAIL_SKIP_PATHS = (
+    "/api/auth/me",
+    "/api/auth/verify-email",
+    "/api/auth/logout",
+    "/api/admin",
+    "/api/settings",
+    "/api/notifications/summary",
+)
+
 
 # 不需要认证的路径前缀
 PUBLIC_PATHS = (
@@ -73,4 +83,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # 将 user_id 注入到 request.state 供下游使用
         request.state.user_id = user_id
+
+        # 检查邮箱是否已验证（跳过白名单路径）
+        if not any(path.startswith(p) for p in EMAIL_SKIP_PATHS):
+            from backend.app.db.session import async_session_factory
+            from backend.app.models.user import User
+            async with async_session_factory() as session:
+                user = await session.get(User, user_id)
+                if user and not user.email_verified:
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "ok": False,
+                            "error": {
+                                "code": "EMAIL_NOT_VERIFIED",
+                                "message": "请先验证邮箱后再使用功能",
+                                "suggested_action": "请查收注册邮箱中的验证邮件，点击链接完成验证",
+                            },
+                        },
+                    )
+
         return await call_next(request)
