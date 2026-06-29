@@ -36,6 +36,7 @@ async def suggest_publish_time_endpoint(req: PublishTimeSuggestRequest, request:
     try:
         result = await suggest_publish_time(
             DATA_DIR,
+            user_id=user_id or 0,
             script_id=req.script_id,
             platform=req.platform,
         )

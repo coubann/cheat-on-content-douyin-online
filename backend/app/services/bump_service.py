@@ -8,10 +8,14 @@ rubric 升级 5 步流程：
 5. 写入新 rubric + 更新 state
 
 跨模型审计：如果排序一致性 < 0.8（4/5 样本），升级被拒。
+
+用户数据隔离：predictions 路径使用 data/{user_id}/predictions/
+rubric_notes.md 和 rubric-memo.md 保留在根目录（系统级）。
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +37,7 @@ _CONSISTENCY_THRESHOLD = 0.8
 
 async def execute_bump(
     data_dir: Path,
+    user_id: int = 0,
     force: bool = False,
 ) -> dict[str, Any]:
     """执行 rubric bump — 5 步升级流程
@@ -54,14 +59,14 @@ async def execute_bump(
       - LLM_CALL_FAILED
       - LLM_JSON_PARSE_FAILED
     """
-    logger.info("bump_start")
+    logger.info("bump_start", user_id=user_id)
 
     # 0. 加载 state
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
 
     # 1. 收集校准池
-    calibration_pool = _collect_calibration_pool(data_dir)
+    calibration_pool = _collect_calibration_pool(data_dir, user_id=user_id)
     if len(calibration_pool) < 3 and not force:
         raise BumpError(
             BUMP_INSUFFICIENT_SAMPLES,
@@ -74,7 +79,7 @@ async def execute_bump(
             "校准池为空，无法执行 bump",
         )
 
-    logger.info("bump_pool_collected", pool_size=len(calibration_pool))
+    logger.info("bump_pool_collected", pool_size=len(calibration_pool), user_id=user_id)
 
     # 2. LLM 提议新权重 + rubric_notes 修订
     old_weights = state.rubric_weights
@@ -144,7 +149,7 @@ async def execute_bump(
     state.last_bump_at = datetime.now().isoformat()
     safe_write(state_path, state.model_dump_json(indent=2))
 
-    logger.info("bump_complete", new_version=new_version, consistency=consistency)
+    logger.info("bump_complete", new_version=new_version, consistency=consistency, user_id=user_id)
 
     return {
         "status": "accepted",
@@ -159,19 +164,19 @@ async def execute_bump(
     }
 
 
-def _collect_calibration_pool(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_calibration_pool(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集校准池 — 所有已复盘的样本
 
-    从 predictions/ 目录读取有 ## 复盘 段的预测文件。
+    从 data/{user_id}/predictions/ 目录读取有 ## 复盘 段的预测文件。
 
     Pre-conditions:
-      - predictions/ 目录存在
+      - data/{user_id}/predictions/ 目录存在
     Post-conditions:
       - 返回校准池列表，每项含 script_id + old_composite + 实际表现
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
 
@@ -186,7 +191,6 @@ def _collect_calibration_pool(data_dir: Path) -> list[dict[str, Any]]:
         script_id = f.stem
 
         # 提取旧综合分（从预测文件中搜索 composite）
-        import re
         composite_match = re.search(r"综合分[：:]\s*(\d+\.?\d*)", content)
         old_composite = float(composite_match.group(1)) if composite_match else 0.0
 
@@ -210,6 +214,8 @@ async def _propose_new_weights(
     old_weights: RubricWeights,
 ) -> dict[str, Any]:
     """LLM 提议新权重 + rubric_notes 修订
+
+    rubric_notes.md 和 rubric-memo.md 是系统级根目录文件。
 
     Pre-conditions:
       - calibration_pool 非空
@@ -379,7 +385,6 @@ def _compute_ranking_consistency(old_rankings: list[str], new_rankings: list[str
 
 def _bump_version(version: str) -> str:
     """版本号递增：v0 → v1, v1 → v2, ..."""
-    import re
     match = re.match(r"v(\d+)", version)
     if match:
         n = int(match.group(1))
@@ -395,6 +400,8 @@ def _append_bump_memo(
     calibration_pool: list[dict[str, Any]],
 ) -> None:
     """追加 bump 记录到 rubric-memo.md
+
+    rubric-memo.md 是系统级根目录文件。
 
     Pre-conditions:
       - rubric-memo.md 存在

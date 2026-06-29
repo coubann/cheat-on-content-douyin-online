@@ -7,6 +7,8 @@ T+N 复盘流程：
 4. 追加 ## 复盘 段（## 预测 段 immutable）
 5. 更新 rubric-memo.md
 6. 检查是否触发 bump
+
+用户数据隔离：predictions 路径使用 data/{user_id}/predictions/
 """
 
 from __future__ import annotations
@@ -32,8 +34,9 @@ logger = structlog.get_logger()
 
 async def retro_predict(
     data_dir: Path,
-    prediction_id: str,
-    actual_plays: int,
+    user_id: int = 0,
+    prediction_id: str = "",
+    actual_plays: int = 0,
     actual_likes: int | None = None,
     actual_comments: int | None = None,
     actual_shares: int | None = None,
@@ -43,11 +46,11 @@ async def retro_predict(
     """复盘 — T+N 复盘流程
 
     Pre-conditions:
-      - predictions/<id>.md 存在
+      - data/{user_id}/predictions/<id>.md 存在
       - actual_plays > 0
     Post-conditions:
-      - predictions/<id>.md 追加 ## 复盘 段（## 预测 段不变）
-      - rubric-memo.md 追加复盘数据
+      - data/{user_id}/predictions/<id>.md 追加 ## 复盘 段（## 预测 段不变）
+      - rubric-memo.md 追加复盘数据（系统级根目录）
       - state.pending_retros 移除该条
       - 返回预测 vs 实际偏差分析
     Side effects:
@@ -57,12 +60,14 @@ async def retro_predict(
       - PREDICTION_NOT_FOUND
       - BLIND_VIOLATION_SEEN_DATA: 预测段被篡改
     """
-    logger.info("retro_start", prediction_id=prediction_id)
+    logger.info("retro_start", prediction_id=prediction_id, user_id=user_id)
+
+    user_pred_dir = data_dir / str(user_id) / "predictions"
 
     # 1. 读取预测文件
-    pred_path = data_dir / "predictions" / f"{prediction_id}.md"
+    pred_path = user_pred_dir / f"{prediction_id}.md"
     if not pred_path.exists():
-        candidates = list((data_dir / "predictions").glob(f"*{prediction_id}*.md"))
+        candidates = list(user_pred_dir.glob(f"*{prediction_id}*.md"))
         if not candidates:
             raise FileNotFoundError(f"{PREDICTION_NOT_FOUND}: {prediction_id}")
         pred_path = candidates[0]
@@ -108,10 +113,10 @@ async def retro_predict(
     # 6. 写入
     safe_write(pred_path, new_content)
 
-    # 7. 更新 rubric-memo.md
+    # 7. 更新 rubric-memo.md（系统级根目录，与 user_id 无关）
     _update_rubric_memo(data_dir, prediction_id, actual_plays, actual_likes, deviation_analysis)
 
-    # 8. 更新 state
+    # 8. 更新 state（根目录下的 .cheat-state.json 是系统级）
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
     # 移除 pending_retros 中匹配的条目
@@ -120,7 +125,7 @@ async def retro_predict(
     ]
     safe_write(state_path, state.model_dump_json(indent=2))
 
-    logger.info("retro_complete", prediction_id=prediction_id, actual_plays=actual_plays)
+    logger.info("retro_complete", prediction_id=prediction_id, actual_plays=actual_plays, user_id=user_id)
 
     return {
         "prediction_id": prediction_id,
@@ -228,6 +233,7 @@ def _update_rubric_memo(
     """更新 rubric-memo.md — 追加复盘数据
 
     rubric-memo.md 包含真实数据，blind scorer 硬禁读。
+    该系统文件保持在 data/ 根目录，与用户数据隔离无关。
 
     Pre-conditions:
       - rubric-memo.md 存在

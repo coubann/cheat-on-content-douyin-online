@@ -227,7 +227,8 @@ class TaskQueue:
         elif info.task_type == "bump":
             from backend.app.services.bump_service import execute_bump
 
-            return await execute_bump(DATA_DIR, force=info.params.get("force", False))
+            user_id = info.params.get("user_id", 0)
+            return await execute_bump(DATA_DIR, user_id=user_id, force=info.params.get("force", False))
         else:
             raise ValueError(f"Unknown task type: {info.task_type}")
 

@@ -4,6 +4,9 @@
 1. pending_retros: 已发布 T+3 天但尚未复盘的预测
 2. bump_suggestions: 触发 bump 条件时的升级建议
 3. low_buffer: buffer 不足（红/橙）时的写稿提醒
+
+用户数据隔离：predictions 路径使用 data/{user_id}/predictions/
+notifications.json 保留在根目录（共享通知状态）。
 """
 
 from __future__ import annotations
@@ -24,7 +27,7 @@ logger = structlog.get_logger()
 _NOTIFICATIONS_FILE = "notifications.json"
 
 
-def check_pending_retros(data_dir: Path) -> list[dict[str, Any]]:
+def check_pending_retros(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """检查需要复盘的预测
 
     读取 state.pending_retros 和预测文件，找出已发布 T+3 天
@@ -46,6 +49,8 @@ def check_pending_retros(data_dir: Path) -> list[dict[str, Any]]:
     state = CheatState.model_validate_json(read_file(state_path))
     notifications: list[dict[str, Any]] = []
 
+    user_pred_dir = data_dir / str(user_id) / "predictions"
+
     for retro_id in state.pending_retros:
         # retro_id 格式: script_id|platform|published_at
         parts = retro_id.split("|")
@@ -66,7 +71,7 @@ def check_pending_retros(data_dir: Path) -> list[dict[str, Any]]:
                 days_since = -1
 
         # 检查预测文件是否已有复盘
-        pred_path = data_dir / "predictions" / f"{script_id}.md"
+        pred_path = user_pred_dir / f"{script_id}.md"
         has_retro = False
         if pred_path.exists():
             content = read_file(pred_path)
@@ -87,7 +92,7 @@ def check_pending_retros(data_dir: Path) -> list[dict[str, Any]]:
     return notifications
 
 
-def get_notification_summary(data_dir: Path) -> dict[str, Any]:
+def get_notification_summary(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """获取通知摘要
 
     汇总所有待处理通知：待复盘、bump 建议、buffer 不足。
@@ -113,10 +118,10 @@ def get_notification_summary(data_dir: Path) -> dict[str, Any]:
     state = CheatState.model_validate_json(read_file(state_path))
 
     # 1. 待复盘
-    pending_retros = check_pending_retros(data_dir)
+    pending_retros = check_pending_retros(data_dir, user_id=user_id)
 
     # 2. bump 建议
-    bump_info = _check_bump_trigger(data_dir, state)
+    bump_info = _check_bump_trigger(data_dir, user_id=user_id, state=state)
     bump_suggestions: list[dict[str, Any]] = []
     if bump_info["triggered"]:
         bump_suggestions.append({
@@ -191,6 +196,8 @@ def mark_notification_read(data_dir: Path, notification_id: str) -> dict[str, An
 
 def _load_read_notification_ids(data_dir: Path) -> list[str]:
     """从 notifications.json 加载已读通知 ID 列表
+
+    notifications.json 保留在根目录，为共享通知状态。
 
     Pre-conditions:
       - data_dir 存在

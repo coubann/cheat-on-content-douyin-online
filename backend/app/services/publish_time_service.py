@@ -1,6 +1,8 @@
 """发布时间优化服务
 
 基于历史数据 + 平台特征 + 热点周期，推荐最佳发布时间。
+
+用户数据隔离：predictions 路径使用 data/{user_id}/predictions/
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ logger = structlog.get_logger()
 
 async def suggest_publish_time(
     data_dir: Path,
+    user_id: int = 0,
     script_id: str | None = None,
     platform: str = "douyin",
 ) -> dict[str, Any]:
@@ -34,7 +37,7 @@ async def suggest_publish_time(
       - LLM 调用 (tag="publish_time")
     """
     # 1. 收集历史发布时间数据（从 retro 文件中提取）
-    historical_data = _collect_historical_timing(data_dir)
+    historical_data = _collect_historical_timing(data_dir, user_id=user_id)
 
     # 2. 读取平台和内容形态
     state_path = data_dir / ".cheat-state.json"
@@ -87,17 +90,19 @@ async def suggest_publish_time(
     }
 
 
-def _collect_historical_timing(data_dir: Path) -> str:
+def _collect_historical_timing(data_dir: Path, user_id: int = 0) -> str:
     """从复盘文件中收集历史发布时间数据
 
+    从 data/{user_id}/predictions/ 目录读取。
+
     Pre-conditions:
-      - data_dir/predictions 目录可能存在
+      - data/{user_id}/predictions 目录可能存在
     Post-conditions:
       - 返回历史发布时间文本（最多 20 条）
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return ""
 

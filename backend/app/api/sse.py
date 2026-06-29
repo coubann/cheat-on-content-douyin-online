@@ -179,7 +179,7 @@ async def predict_sse(req: PredictSseRequest, request: Request) -> StreamingResp
 # ---- Bump SSE ----
 
 
-async def _bump_sse_generator(force: bool) -> Any:
+async def _bump_sse_generator(force: bool, user_id: int = 0) -> Any:
     """SSE 生成器 — 逐步执行 bump 并发送进度
 
     Pre-conditions:
@@ -197,7 +197,7 @@ async def _bump_sse_generator(force: bool) -> Any:
         state_path = DATA_DIR / ".cheat-state.json"
         state = CheatState.model_validate_json(read_file(state_path))
 
-        calibration_pool = _collect_calibration_pool(DATA_DIR)
+        calibration_pool = _collect_calibration_pool(DATA_DIR, user_id=user_id)
         if len(calibration_pool) < 3 and not force:
             yield _sse_event({
                 "phase": "error",
@@ -302,7 +302,7 @@ async def _bump_sse_generator(force: bool) -> Any:
 
 
 @router.post("/bump")
-async def bump_sse(req: BumpSseRequest) -> StreamingResponse:
+async def bump_sse(req: BumpSseRequest, request: Request) -> StreamingResponse:
     """启动 bump 并流式返回进度
 
     Pre-conditions:
@@ -312,8 +312,9 @@ async def bump_sse(req: BumpSseRequest) -> StreamingResponse:
     Side effects:
       - 多次 LLM 调用、文件写入
     """
+    user_id = getattr(request.state, "user_id", 0)
     return StreamingResponse(
-        _bump_sse_generator(req.force),
+        _bump_sse_generator(req.force, user_id=user_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -6,10 +6,13 @@
 - rubric 演进历史
 - 最佳/最差表现内容
 - 改进建议
+
+用户数据隔离：predictions 和 reports 路径使用 data/{user_id}/ 子目录。
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -24,26 +27,26 @@ from backend.app.services.llm import call_llm_json
 logger = structlog.get_logger()
 
 
-async def generate_retro_report(data_dir: Path) -> dict[str, Any]:
+async def generate_retro_report(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """生成自动化复盘报告
 
     Pre-conditions:
       - 至少有 1 篇已复盘的预测
     Post-conditions:
       - 返回结构化复盘报告
-      - 报告被写入 data_dir/reports/
+      - 报告被写入 data/{user_id}/reports/
     Side effects:
       - LLM 调用 (tag="retro_report")
       - 写文件系统
     """
-    logger.info("retro_report_start")
+    logger.info("retro_report_start", user_id=user_id)
 
     # 1. 收集所有已复盘的预测
-    retros = _collect_retros(data_dir)
+    retros = _collect_retros(data_dir, user_id=user_id)
     if not retros:
         return {"status": "no_data", "message": "尚无复盘数据，无法生成报告"}
 
-    # 2. 加载 state
+    # 2. 加载 state（系统级根目录）
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
 
@@ -53,7 +56,7 @@ async def generate_retro_report(data_dir: Path) -> dict[str, Any]:
     # 4. 维度相关性分析
     dim_analysis = _analyze_dimensions(retros)
 
-    # 5. rubric 演进历史
+    # 5. rubric 演进历史（系统文件，保持在根目录）
     rubric_history = _extract_rubric_history(data_dir)
 
     # 6. LLM 综合建议
@@ -78,23 +81,23 @@ async def generate_retro_report(data_dir: Path) -> dict[str, Any]:
     }
 
     # 8. 写入报告文件
-    _save_report(data_dir, report)
+    _save_report(data_dir, user_id=user_id, report=report)
 
-    logger.info("retro_report_complete", total_retros=len(retros))
+    logger.info("retro_report_complete", total_retros=len(retros), user_id=user_id)
     return report
 
 
-def _collect_retros(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_retros(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集所有已复盘的预测数据
 
     Pre-conditions:
-      - predictions/ 目录存在
+      - data/{user_id}/predictions/ 目录存在
     Post-conditions:
       - 返回复盘数据列表
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
 
@@ -289,6 +292,8 @@ def _rank(values: list[float]) -> list[float]:
 def _extract_rubric_history(data_dir: Path) -> list[dict[str, Any]]:
     """从 rubric-memo.md 提取 rubric 演进历史
 
+    该系统文件保持在 data/ 根目录，与用户数据隔离无关。
+
     Pre-conditions:
       - rubric-memo.md 存在
     Post-conditions:
@@ -378,23 +383,22 @@ async def _generate_llm_insights(
     return result
 
 
-async def list_retro_reports(data_dir: Path) -> list[dict[str, Any]]:
+async def list_retro_reports(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """列出所有历史复盘报告
 
     Pre-conditions:
-      - reports/ 目录可能存在或不存在
+      - data/{user_id}/reports/ 目录可能存在或不存在
     Post-conditions:
       - 返回报告摘要列表，按生成时间倒序
     Side effects:
       - 读文件系统
     """
-    reports_dir = data_dir / "reports"
+    reports_dir = data_dir / str(user_id) / "reports"
     if not reports_dir.exists():
         return []
 
     reports: list[dict[str, Any]] = []
     for f in sorted(reports_dir.glob("retro_*.json"), reverse=True):
-        import json
         try:
             content = read_file(f)
             data = json.loads(content)
@@ -411,7 +415,7 @@ async def list_retro_reports(data_dir: Path) -> list[dict[str, Any]]:
     return reports
 
 
-async def get_retro_report(data_dir: Path, report_id: str) -> dict[str, Any] | None:
+async def get_retro_report(data_dir: Path, user_id: int = 0, report_id: str = "") -> dict[str, Any] | None:
     """获取指定历史复盘报告
 
     Pre-conditions:
@@ -421,9 +425,7 @@ async def get_retro_report(data_dir: Path, report_id: str) -> dict[str, Any] | N
     Side effects:
       - 读文件系统
     """
-    import json
-
-    report_path = data_dir / "reports" / f"{report_id}.json"
+    report_path = data_dir / str(user_id) / "reports" / f"{report_id}.json"
     if not report_path.exists():
         return None
 
@@ -434,17 +436,20 @@ async def get_retro_report(data_dir: Path, report_id: str) -> dict[str, Any] | N
         return None
 
 
-def _save_report(data_dir: Path, report: dict[str, Any]) -> None:
+def _save_report(data_dir: Path, user_id: int = 0, report: dict[str, Any] | None = None) -> None:
     """保存报告到文件
 
     Pre-conditions:
       - report 已生成
     Post-conditions:
-      - 报告被写入 data_dir/reports/
+      - 报告被写入 data/{user_id}/reports/
     Side effects:
       - 写文件系统
     """
-    reports_dir = data_dir / "reports"
+    if report is None:
+        report = {}
+
+    reports_dir = data_dir / str(user_id) / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -455,11 +460,10 @@ def _save_report(data_dir: Path, report: dict[str, Any]) -> None:
     safe_write(report_path, md_content)
 
     # 同时保存 JSON 版本
-    import json
     json_path = reports_dir / f"retro_{timestamp}.json"
     safe_write(json_path, json.dumps(report, indent=2, ensure_ascii=False))
 
-    logger.info("retro_report_saved", path=str(report_path))
+    logger.info("retro_report_saved", path=str(report_path), user_id=user_id)
 
 
 def _format_report_md(report: dict[str, Any]) -> str:

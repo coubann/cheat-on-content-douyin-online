@@ -1,9 +1,13 @@
 """全链路追踪服务
 
 追踪内容从选题到复盘的完整生命周期。
+
+用户数据隔离：scripts、predictions 路径使用 data/{user_id}/ 子目录。
 """
+
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,7 +19,7 @@ from backend.app.services.file_io import read_file
 logger = structlog.get_logger()
 
 
-def get_pipeline(data_dir: Path) -> dict[str, Any]:
+def get_pipeline(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """获取全链路追踪数据
 
     将选题→脚本→预测→发布→复盘的完整流程串联起来。
@@ -33,10 +37,10 @@ def get_pipeline(data_dir: Path) -> dict[str, Any]:
     CheatState.model_validate_json(read_file(state_path))
 
     # 收集各阶段数据
-    scripts = _collect_scripts(data_dir)
-    predictions = _collect_predictions(data_dir)
+    scripts = _collect_scripts(data_dir, user_id=user_id)
+    predictions = _collect_predictions(data_dir, user_id=user_id)
     publishes = _collect_publishes(data_dir)
-    retros = _collect_retros(data_dir)
+    retros = _collect_retros(data_dir, user_id=user_id)
     candidates = _collect_candidates(data_dir)
     experiments = _collect_experiments(data_dir)
 
@@ -163,8 +167,10 @@ def _compute_pipeline_status(script: dict, predictions: list, publishes: list, r
         return "draft"
 
 
-def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_scripts(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集脚本
+
+    从 data/{user_id}/scripts/ 目录读取。
 
     Pre-conditions:
       - 无
@@ -173,7 +179,7 @@ def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    scripts_dir = data_dir / "scripts"
+    scripts_dir = data_dir / str(user_id) / "scripts"
     if not scripts_dir.exists():
         return []
     results = []
@@ -193,8 +199,10 @@ def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
-def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_predictions(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集预测
+
+    从 data/{user_id}/predictions/ 目录读取。
 
     Pre-conditions:
       - 无
@@ -203,10 +211,9 @@ def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
-    import re
     results = []
     for f in preds_dir.glob("*.md"):
         content = read_file(f)
@@ -235,6 +242,8 @@ def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
 def _collect_publishes(data_dir: Path) -> list[dict[str, Any]]:
     """收集发布记录
 
+    从系统级 .cheat-state.json 读取（共享状态）。
+
     Pre-conditions:
       - 无
     Post-conditions:
@@ -251,8 +260,10 @@ def _collect_publishes(data_dir: Path) -> list[dict[str, Any]]:
     return [{"script_id": s, "published_at": ""} for s in state.shoots]
 
 
-def _collect_retros(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_retros(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集复盘记录
+
+    从 data/{user_id}/predictions/ 目录读取。
 
     Pre-conditions:
       - 无
@@ -261,10 +272,9 @@ def _collect_retros(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
-    import re
     results = []
     for f in preds_dir.glob("*.md"):
         content = read_file(f)
@@ -296,6 +306,8 @@ def _collect_retros(data_dir: Path) -> list[dict[str, Any]]:
 def _collect_candidates(data_dir: Path) -> list[dict[str, Any]]:
     """收集候选选题
 
+    从系统级根目录 candidates.md 读取。
+
     Pre-conditions:
       - 无
     Post-conditions:
@@ -317,6 +329,8 @@ def _collect_candidates(data_dir: Path) -> list[dict[str, Any]]:
 
 def _collect_experiments(data_dir: Path) -> list[dict[str, Any]]:
     """收集 A/B 实验
+
+    从系统级根目录 experiments/ 读取。
 
     Pre-conditions:
       - 无

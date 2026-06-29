@@ -1,7 +1,11 @@
 """内容日历服务
 
 管理内容排期，将选题、脚本、发布计划可视化。
+
+用户数据隔离：scripts、predictions 路径使用 data/{user_id}/ 子目录。
+排期数据 (schedules.json) 保留在根目录（共享排期表）。
 """
+
 from __future__ import annotations
 
 import json
@@ -16,7 +20,7 @@ from backend.app.services.file_io import read_file, safe_write
 logger = structlog.get_logger()
 
 
-def get_calendar(data_dir: Path, days: int = 14) -> dict[str, Any]:
+def get_calendar(data_dir: Path, user_id: int = 0, days: int = 14) -> dict[str, Any]:
     """获取内容日历
 
     Pre-conditions:
@@ -32,8 +36,8 @@ def get_calendar(data_dir: Path, days: int = 14) -> dict[str, Any]:
     state = CheatState.model_validate_json(read_file(state_path))
 
     # 收集所有相关数据
-    scripts = _collect_scripts(data_dir)
-    predictions = _collect_predictions(data_dir)
+    scripts = _collect_scripts(data_dir, user_id=user_id)
+    predictions = _collect_predictions(data_dir, user_id=user_id)
     schedules = _load_schedules(data_dir)
 
     # 生成日历
@@ -78,8 +82,9 @@ def get_calendar(data_dir: Path, days: int = 14) -> dict[str, Any]:
 
 def add_schedule(
     data_dir: Path,
-    date: str,
-    script_id: str,
+    user_id: int = 0,
+    date: str = "",
+    script_id: str = "",
     platform: str = "douyin",
     notes: str = "",
 ) -> dict[str, Any]:
@@ -110,11 +115,11 @@ def add_schedule(
     schedules.append(new_schedule)
     _save_schedules(data_dir, schedules)
 
-    logger.info("schedule_added", schedule_id=schedule_id, date=date, script_id=script_id)
+    logger.info("schedule_added", schedule_id=schedule_id, date=date, script_id=script_id, user_id=user_id)
     return new_schedule
 
 
-def update_schedule(data_dir: Path, schedule_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+def update_schedule(data_dir: Path, user_id: int = 0, schedule_id: str = "", updates: dict[str, Any] | None = None) -> dict[str, Any]:
     """更新排期
 
     Pre-conditions:
@@ -124,6 +129,8 @@ def update_schedule(data_dir: Path, schedule_id: str, updates: dict[str, Any]) -
     Side effects:
       - 写文件系统
     """
+    if updates is None:
+        updates = {}
     schedules = _load_schedules(data_dir)
 
     for s in schedules:
@@ -135,7 +142,7 @@ def update_schedule(data_dir: Path, schedule_id: str, updates: dict[str, Any]) -
     raise ValueError(f"排期不存在: {schedule_id}")
 
 
-def remove_schedule(data_dir: Path, schedule_id: str) -> None:
+def remove_schedule(data_dir: Path, user_id: int = 0, schedule_id: str = "") -> None:
     """删除排期
 
     Pre-conditions:
@@ -150,8 +157,10 @@ def remove_schedule(data_dir: Path, schedule_id: str) -> None:
     _save_schedules(data_dir, schedules)
 
 
-def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_scripts(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集脚本信息
+
+    从 data/{user_id}/scripts/ 目录读取。
 
     Pre-conditions:
       - 无
@@ -160,7 +169,7 @@ def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    scripts_dir = data_dir / "scripts"
+    scripts_dir = data_dir / str(user_id) / "scripts"
     if not scripts_dir.exists():
         return []
 
@@ -180,8 +189,10 @@ def _collect_scripts(data_dir: Path) -> list[dict[str, Any]]:
     return results
 
 
-def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_predictions(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """收集预测信息
+
+    从 data/{user_id}/predictions/ 目录读取。
 
     Pre-conditions:
       - 无
@@ -190,7 +201,7 @@ def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
 
@@ -213,6 +224,8 @@ def _collect_predictions(data_dir: Path) -> list[dict[str, Any]]:
 def _load_schedules(data_dir: Path) -> list[dict[str, Any]]:
     """加载排期数据
 
+    排期表 (schedules.json) 保留在根目录，为共享数据。
+
     Pre-conditions:
       - 无
     Post-conditions:
@@ -231,6 +244,8 @@ def _load_schedules(data_dir: Path) -> list[dict[str, Any]]:
 
 def _save_schedules(data_dir: Path, schedules: list[dict[str, Any]]) -> None:
     """保存排期数据
+
+    排期表 (schedules.json) 保留在根目录，为共享数据。
 
     Pre-conditions:
       - data_dir 目录存在

@@ -1,4 +1,7 @@
-"""状态看板服务 — cheat-status 的 Python 实现"""
+"""状态看板服务 — cheat-status 的 Python 实现
+
+用户数据隔离：predictions 路径使用 data/{user_id}/predictions/
+"""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from backend.app.services.file_io import read_file
 logger = structlog.get_logger()
 
 
-async def get_status(data_dir: Path) -> dict[str, Any]:
+async def get_status(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """获取项目状态看板
 
     Pre-conditions:
@@ -41,7 +44,7 @@ async def get_status(data_dir: Path) -> dict[str, Any]:
     confidence_level = _compute_confidence(state.calibration_samples)
 
     # 检查是否需要 bump
-    bump_info = _check_bump_trigger(data_dir, state)
+    bump_info = _check_bump_trigger(data_dir, user_id=user_id, state=state)
 
     return {
         "initialized": True,
@@ -61,7 +64,7 @@ async def get_status(data_dir: Path) -> dict[str, Any]:
     }
 
 
-async def get_today(data_dir: Path) -> dict[str, Any]:
+async def get_today(data_dir: Path, user_id: int = 0) -> dict[str, Any]:
     """获取今日 todo（按优先级排序）
 
     Pre-conditions:
@@ -71,7 +74,7 @@ async def get_today(data_dir: Path) -> dict[str, Any]:
     Side effects:
       - 无
     """
-    status = await get_status(data_dir)
+    status = await get_status(data_dir, user_id=user_id)
     if not status.get("initialized"):
         return {"todos": [{"priority": 1, "action": "初始化项目", "endpoint": "POST /api/init"}]}
 
@@ -145,7 +148,7 @@ def _compute_confidence(calibration_samples: int) -> str:
         return "high"
 
 
-def _check_bump_trigger(data_dir: Path, state: CheatState) -> dict[str, Any]:
+def _check_bump_trigger(data_dir: Path, user_id: int = 0, state: CheatState | None = None) -> dict[str, Any]:
     """检查是否触发 bump — 完整三条件实现
 
     触发条件（任一满足即触发）：
@@ -154,7 +157,7 @@ def _check_bump_trigger(data_dir: Path, state: CheatState) -> dict[str, Any]:
     3. 2 次同向偏差 + 评论反向证据：2 次同向偏差 + 评论分析显示反向信号
 
     Pre-conditions:
-      - data_dir/predictions/ 目录存在（可选）
+      - data/{user_id}/predictions/ 目录存在（可选）
       - .cheat-state.json 存在
     Post-conditions:
       - 返回 dict: triggered, reason, trigger_type
@@ -169,12 +172,15 @@ def _check_bump_trigger(data_dir: Path, state: CheatState) -> dict[str, Any]:
         "trigger_type": None,
     }
 
+    if state is None:
+        return default_result
+
     # 如果已经 bump 过且校准样本不足，不再触发
     if state.calibration_samples < 3:
         return default_result
 
     # 收集所有已复盘的预测文件中的偏差数据
-    retros = _collect_retro_deviations(data_dir)
+    retros = _collect_retro_deviations(data_dir, user_id=user_id)
     if not retros:
         return default_result
 
@@ -196,20 +202,20 @@ def _check_bump_trigger(data_dir: Path, state: CheatState) -> dict[str, Any]:
     return default_result
 
 
-def _collect_retro_deviations(data_dir: Path) -> list[dict[str, Any]]:
+def _collect_retro_deviations(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """从预测文件中收集复盘偏差数据
 
-    读取 predictions/ 目录下所有含 ## 复盘 段的文件，
+    读取 data/{user_id}/predictions/ 目录下所有含 ## 复盘 段的文件，
     提取偏差方向 (overestimated/underestimated) 和实际/预测播放量。
 
     Pre-conditions:
-      - data_dir/predictions/ 目录存在（可选）
+      - data/{user_id}/predictions/ 目录存在（可选）
     Post-conditions:
       - 返回偏差列表，按文件修改时间排序（旧→新）
     Side effects:
       - 无
     """
-    preds_dir = data_dir / "predictions"
+    preds_dir = data_dir / str(user_id) / "predictions"
     if not preds_dir.exists():
         return []
 

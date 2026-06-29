@@ -2,6 +2,8 @@
 
 cheat-shoot: 登记拍摄 + diff 检测 v2
 cheat-publish: 发布元数据登记 + 多平台回传
+
+用户数据隔离：scripts、predictions、videos 路径使用 data/{user_id}/ 子目录。
 """
 
 from __future__ import annotations
@@ -20,24 +22,28 @@ logger = structlog.get_logger()
 
 async def register_shoot(
     data_dir: Path,
-    script_id: str,
-    shoot_content: str,
+    user_id: int = 0,
+    script_id: str = "",
+    shoot_content: str = "",
 ) -> dict[str, Any]:
     """登记拍摄 — cheat-shoot
 
     对比脚本和拍摄稿的差异，如果 >=30% 则触发 v2 预测。
 
     Pre-conditions:
-      - scripts/<id>.md 存在
+      - data/{user_id}/scripts/<id>.md 存在
     Post-conditions:
-      - videos/<id>.md 被创建
+      - data/{user_id}/videos/<id>.md 被创建
       - state.shoots 被更新
       - 返回 diff 比例 + 是否需要 v2
     Side effects:
       - 写文件系统
       - 更新 .cheat-state.json
     """
-    script_path = data_dir / "scripts" / f"{script_id}.md"
+    user_scripts_dir = data_dir / str(user_id) / "scripts"
+    user_videos_dir = data_dir / str(user_id) / "videos"
+
+    script_path = user_scripts_dir / f"{script_id}.md"
     script_content = read_file(script_path)
 
     # 计算 diff
@@ -45,10 +51,9 @@ async def register_shoot(
     needs_v2 = diff_ratio >= 0.3
 
     # 创建视频记录
-    videos_dir = data_dir / "videos"
-    videos_dir.mkdir(parents=True, exist_ok=True)
+    user_videos_dir.mkdir(parents=True, exist_ok=True)
 
-    video_path = videos_dir / f"{script_id}.md"
+    video_path = user_videos_dir / f"{script_id}.md"
     video_content = f"""# 拍摄记录: {script_id}
 
 > 登记时间: {datetime.now().isoformat()}
@@ -68,7 +73,7 @@ async def register_shoot(
 """
     safe_write(video_path, video_content)
 
-    # 更新 state
+    # 更新 state（系统级根目录）
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
     if script_id not in state.shoots:
@@ -76,7 +81,7 @@ async def register_shoot(
     state.in_progress_session = script_id
     safe_write(state_path, state.model_dump_json(indent=2))
 
-    logger.info("shoot_registered", script_id=script_id, diff_ratio=diff_ratio, needs_v2=needs_v2)
+    logger.info("shoot_registered", script_id=script_id, diff_ratio=diff_ratio, needs_v2=needs_v2, user_id=user_id)
     return {
         "script_id": script_id,
         "diff_ratio": round(diff_ratio, 3),
@@ -87,17 +92,18 @@ async def register_shoot(
 
 async def register_publish(
     data_dir: Path,
-    script_id: str,
-    platform: str,
+    user_id: int = 0,
+    script_id: str = "",
+    platform: str = "douyin",
     publish_url: str | None = None,
     published_at: str | None = None,
 ) -> dict[str, Any]:
     """发布登记 — cheat-publish
 
     Pre-conditions:
-      - videos/<id>.md 存在（已登记拍摄）
+      - data/{user_id}/videos/<id>.md 存在（已登记拍摄）
     Post-conditions:
-      - videos/<id>.md 追加发布信息
+      - data/{user_id}/videos/<id>.md 追加发布信息
       - state.pending_retros 追加（T+3d 后需要复盘）
       - state.shoots 移除该条（已发布）
       - state.calibration_samples +1
@@ -105,7 +111,8 @@ async def register_publish(
       - 写文件系统
       - 更新 .cheat-state.json
     """
-    video_path = data_dir / "videos" / f"{script_id}.md"
+    user_videos_dir = data_dir / str(user_id) / "videos"
+    video_path = user_videos_dir / f"{script_id}.md"
     if not video_path.exists():
         from backend.app.errors import FILE_NOT_FOUND
         raise FileNotFoundError(f"{FILE_NOT_FOUND}: 视频记录不存在 {script_id}")
@@ -129,7 +136,7 @@ async def register_publish(
 """
     safe_write(video_path, existing + publish_section)
 
-    # 更新 state
+    # 更新 state（系统级根目录）
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
 
@@ -147,7 +154,7 @@ async def register_publish(
 
     safe_write(state_path, state.model_dump_json(indent=2))
 
-    logger.info("publish_registered", script_id=script_id, platform=platform)
+    logger.info("publish_registered", script_id=script_id, platform=platform, user_id=user_id)
     return {
         "script_id": script_id,
         "platform": platform,
@@ -157,10 +164,10 @@ async def register_publish(
     }
 
 
-async def list_published(data_dir: Path) -> list[dict[str, Any]]:
+async def list_published(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]:
     """列出所有内容（合并预测 + 发布 + 复盘数据）
 
-    从 predictions/ 和 videos/ 目录合并数据，
+    从 data/{user_id}/predictions/ 和 data/{user_id}/videos/ 目录合并数据，
     展示完整的内容生命周期状态。
 
     Pre-conditions:
@@ -174,10 +181,12 @@ async def list_published(data_dir: Path) -> list[dict[str, Any]]:
 
     results: dict[str, dict[str, Any]] = {}
 
+    user_preds_dir = data_dir / str(user_id) / "predictions"
+    user_videos_dir = data_dir / str(user_id) / "videos"
+
     # 1. 从预测文件收集数据
-    preds_dir = data_dir / "predictions"
-    if preds_dir.exists():
-        for f in sorted(preds_dir.glob("*.md"), reverse=True):
+    if user_preds_dir.exists():
+        for f in sorted(user_preds_dir.glob("*.md"), reverse=True):
             content = read_file(f)
             script_id = f.stem
             pred_time = ""
@@ -230,9 +239,8 @@ async def list_published(data_dir: Path) -> list[dict[str, Any]]:
             }
 
     # 2. 从视频文件补充发布信息
-    videos_dir = data_dir / "videos"
-    if videos_dir.exists():
-        for f in sorted(videos_dir.glob("*.md"), reverse=True):
+    if user_videos_dir.exists():
+        for f in sorted(user_videos_dir.glob("*.md"), reverse=True):
             content = read_file(f)
             script_id = f.stem
             is_published = "状态: 已发布" in content

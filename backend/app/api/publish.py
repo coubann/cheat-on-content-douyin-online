@@ -1,8 +1,11 @@
-"""发布复盘路由"""
+"""发布复盘路由
+
+用户数据隔离：从 request.state.user_id 获取当前用户，传入 service 层。
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from backend.app.config import DATA_DIR
@@ -38,10 +41,11 @@ class RetroRequest(BaseModel):
 
 
 @router.post("/shoot")
-async def register_shoot_endpoint(req: ShootRequest) -> ApiResponse:
+async def register_shoot_endpoint(req: ShootRequest, request: Request) -> ApiResponse:
     """登记拍摄 — cheat-shoot"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
-        result = await register_shoot(DATA_DIR, req.script_id, req.shoot_content)
+        result = await register_shoot(DATA_DIR, user_id=user_id, script_id=req.script_id, shoot_content=req.shoot_content)
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError:
         return ApiResponse(
@@ -55,11 +59,13 @@ async def register_shoot_endpoint(req: ShootRequest) -> ApiResponse:
 
 
 @router.post("")
-async def register_publish_endpoint(req: PublishRequest) -> ApiResponse:
+async def register_publish_endpoint(req: PublishRequest, request: Request) -> ApiResponse:
     """发布登记 — cheat-publish"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
         result = await register_publish(
-            DATA_DIR, req.script_id, req.platform, req.publish_url, req.published_at
+            DATA_DIR, user_id=user_id, script_id=req.script_id, platform=req.platform,
+            publish_url=req.publish_url, published_at=req.published_at,
         )
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError as e:
@@ -74,25 +80,28 @@ async def register_publish_endpoint(req: PublishRequest) -> ApiResponse:
 
 
 @router.get("")
-async def list_published_endpoint() -> ApiResponse:
+async def list_published_endpoint(request: Request) -> ApiResponse:
     """列出已发布内容"""
-    result = await list_published(DATA_DIR)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await list_published(DATA_DIR, user_id=user_id)
     return ApiResponse(ok=True, data={"videos": result})
 
 
 @router.post("/retro/{prediction_id}")
-async def retro_endpoint(prediction_id: str, req: RetroRequest) -> ApiResponse:
+async def retro_endpoint(prediction_id: str, req: RetroRequest, request: Request) -> ApiResponse:
     """复盘 — cheat-retro"""
+    user_id = getattr(request.state, "user_id", 0)
     try:
         result = await retro_predict(
             DATA_DIR,
-            prediction_id,
-            req.actual_plays,
-            req.actual_likes,
-            req.actual_comments,
-            req.actual_shares,
-            req.retro_notes,
-            req.days_since_publish,
+            user_id=user_id,
+            prediction_id=prediction_id,
+            actual_plays=req.actual_plays,
+            actual_likes=req.actual_likes,
+            actual_comments=req.actual_comments,
+            actual_shares=req.actual_shares,
+            retro_notes=req.retro_notes,
+            days_since_publish=req.days_since_publish,
         )
         return ApiResponse(ok=True, data=result)
     except FileNotFoundError as e:
@@ -107,23 +116,26 @@ async def retro_endpoint(prediction_id: str, req: RetroRequest) -> ApiResponse:
 
 
 @router.get("/retro-report")
-async def retro_report_endpoint() -> ApiResponse:
+async def retro_report_endpoint(request: Request) -> ApiResponse:
     """生成自动化复盘报告"""
-    result = await generate_retro_report(DATA_DIR)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await generate_retro_report(DATA_DIR, user_id=user_id)
     return ApiResponse(ok=True, data=result)
 
 
 @router.get("/retro-reports")
-async def list_retro_reports_endpoint() -> ApiResponse:
+async def list_retro_reports_endpoint(request: Request) -> ApiResponse:
     """列出历史复盘报告"""
-    result = await list_retro_reports(DATA_DIR)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await list_retro_reports(DATA_DIR, user_id=user_id)
     return ApiResponse(ok=True, data={"reports": result})
 
 
 @router.get("/retro-reports/{report_id}")
-async def get_retro_report_endpoint(report_id: str) -> ApiResponse:
+async def get_retro_report_endpoint(report_id: str, request: Request) -> ApiResponse:
     """获取指定历史复盘报告"""
-    result = await get_retro_report(DATA_DIR, report_id)
+    user_id = getattr(request.state, "user_id", 0)
+    result = await get_retro_report(DATA_DIR, user_id=user_id, report_id=report_id)
     if result is None:
         return ApiResponse(
             ok=False,
