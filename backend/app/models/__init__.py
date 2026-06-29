@@ -6,6 +6,7 @@ from backend.app.models.guide_status import GuideStatus
 from backend.app.models.user_action import UserAction
 from backend.app.models.announcement import Announcement
 from backend.app.models.invite_record import InviteRecord
+from backend.app.models.dismissed_announcement import DismissedAnnouncement
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "UserAction",
     "Announcement",
     "InviteRecord",
+    "DismissedAnnouncement",
 ]

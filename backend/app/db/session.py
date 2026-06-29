@@ -45,6 +45,7 @@ async def create_tables() -> None:
     from backend.app.models import user_action  # noqa: F401
     from backend.app.models import announcement  # noqa: F401
     from backend.app.models import invite_record  # noqa: F401
+    from backend.app.models import dismissed_announcement  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

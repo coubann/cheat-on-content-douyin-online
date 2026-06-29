@@ -4,12 +4,22 @@
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+import asyncio
+import secrets
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header
 from pydantic import BaseModel, field_validator
 
-from backend.app.config import CHECKIN_POINTS, DAILY_FREE_POINTS, INVITE_CODE_REQUIRED, INVITE_REWARD_POINTS, MAX_INVITE_COUNT, REGISTRATION_OPEN
+from backend.app.config import (
+    CHECKIN_POINTS,
+    DAILY_FREE_POINTS,
+    INVITE_CODE_REQUIRED,
+    INVITE_REWARD_POINTS,
+    MAX_INVITE_COUNT,
+    REGISTRATION_OPEN,
+    VERIFICATION_BASE_URL,
+)
 from backend.app.db.session import async_session_factory
 from backend.app.errors import (
     AUTH_EMAIL_EXISTS,
@@ -24,6 +34,7 @@ from backend.app.models.invite_record import InviteRecord
 from backend.app.models.points_log import PointsLog
 from backend.app.models.user import User
 from backend.app.models.user_action import UserAction
+from backend.app.services.email_service import send_verification_email
 from backend.app.services.jwt_service import (
     create_token,
     generate_invite_code,
@@ -224,7 +235,17 @@ async def register(req: RegisterRequest) -> ApiResponse:
             user.free_points_date = today
             free_granted = DAILY_FREE_POINTS
 
+        # 生成邮箱验证 token
+        token_secret = secrets.token_urlsafe(48)
+        expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        user.verification_token = token_secret
+        user.verification_token_expires = expires
+
         await session.commit()
+
+    # 异步发送验证邮件（不影响注册流程）
+    verify_url = f"{VERIFICATION_BASE_URL}/api/auth/verify-email?token={token_secret}"
+    asyncio.ensure_future(send_verification_email(user.email, verify_url))
 
     # 生成 JWT
     token = create_token(user.id, user.role)
@@ -267,23 +288,13 @@ async def login(req: LoginRequest) -> ApiResponse:
         # 更新登录时间
         user.last_login_at = datetime.now(timezone.utc)
 
-        # 登录时发放每日免费点数
+        # 登录时发放每日免费点数（统一 80，会员无加成）
         today = date.today()
         free_granted = 0
         if user.free_points_date != today:
             user.free_points_today = DAILY_FREE_POINTS
             user.free_points_date = today
             free_granted = DAILY_FREE_POINTS
-
-            # 会员每日免费点数加成
-            membership_bonus = {
-                "basic": 200,
-                "standard": 300,
-                "premium": 500,
-            }.get(user.membership_type, 0)
-            if membership_bonus > 0:
-                user.free_points_today = DAILY_FREE_POINTS + membership_bonus
-                free_granted = DAILY_FREE_POINTS + membership_bonus
 
         # 记录登录行为
         session.add(UserAction(
@@ -334,15 +345,6 @@ async def get_me(authorization: str | None = Header(None)) -> ApiResponse:
             user.free_points_today = DAILY_FREE_POINTS
             user.free_points_date = today
             free_granted = DAILY_FREE_POINTS
-            # 会员加成
-            membership_bonus = {
-                "basic": 200,
-                "standard": 300,
-                "premium": 500,
-            }.get(user.membership_type or "none", 0)
-            if membership_bonus:
-                user.free_points_today += membership_bonus
-                free_granted += membership_bonus
             await session.commit()
 
         # 获取 guide status
@@ -467,3 +469,37 @@ async def update_guide_status(body: dict, authorization: str | None = Header(Non
             "guide_step": guide.guide_step,
             "dismissed": guide.dismissed,
         })
+
+
+@router.get("/verify-email")
+async def verify_email(token: str) -> ApiResponse:
+    """验证邮箱"""
+    async with async_session_factory() as session:
+        from sqlalchemy import select
+
+        result = await session.execute(
+            select(User).where(User.verification_token == token)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            return ApiResponse(
+                ok=False,
+                error=ErrorDetail(code="INVALID_TOKEN", message="验证链接无效"),
+            )
+        if user.email_verified:
+            return ApiResponse(
+                ok=True,
+                data={"email_verified": True, "message": "邮箱已验证"},
+            )
+        now = datetime.now(timezone.utc)
+        if user.verification_token_expires and now > user.verification_token_expires:
+            return ApiResponse(
+                ok=False,
+                error=ErrorDetail(code="TOKEN_EXPIRED", message="验证链接已过期，请重新注册"),
+            )
+        user.email_verified = True
+        user.verification_token = None
+        user.verification_token_expires = None
+        await session.commit()
+
+    return ApiResponse(ok=True, data={"email_verified": True, "message": "邮箱验证成功"})

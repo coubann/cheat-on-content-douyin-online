@@ -27,6 +27,9 @@ class User(Base):
     invite_code: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
     invited_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verification_token: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    verification_token_expires: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -47,6 +50,7 @@ class User(Base):
             "checkin_streak": self.checkin_streak,
             "invite_code": self.invite_code,
             "disabled": self.disabled,
+            "email_verified": self.email_verified,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
         }

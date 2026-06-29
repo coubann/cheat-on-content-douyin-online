@@ -16,18 +16,39 @@ interface Announcement {
   type: string;
 }
 
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("auth_token");
+}
+
 export default function AnnouncementBanner() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const res = await apiFetch<Announcement>("/api/announcements/active");
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await apiFetch<Announcement>("/api/announcements/active", { headers });
       if (res.ok && res.data) {
         setAnnouncement(res.data);
       }
     })();
   }, []);
+
+  const handleDismiss = async () => {
+    if (!announcement) return;
+    setDismissed(true);
+    // 持久化关闭记录
+    const token = getAuthToken();
+    if (token) {
+      await apiFetch(`/api/announcements/${announcement.id}/dismiss`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+  };
 
   if (!announcement || dismissed) return null;
 
@@ -43,7 +64,7 @@ export default function AnnouncementBanner() {
         <p style={{ color: "var(--text-secondary)" }}>{announcement.content}</p>
       </div>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={handleDismiss}
         className="text-xs px-2 py-1 rounded hover:opacity-70"
         style={{ color: "var(--text-muted)", background: "rgba(0,0,0,0.2)" }}
       >

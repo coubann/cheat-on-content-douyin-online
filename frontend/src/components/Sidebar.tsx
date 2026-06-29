@@ -22,8 +22,9 @@ const NAV_ITEMS = [
   { href: "/status", label: "状态看板", icon: "📈" },
   { href: "/bump", label: "Rubric 升级", icon: "⬆" },
   { href: "/report", label: "复盘报告", icon: "📋" },
-  { href: "/persona", label: "受众画像", icon: "👤" },
+  { href: "/persona", label: "受众画像", icon: "🎭" },
   { href: "/trends", label: "趋势分析", icon: "📡" },
+  { href: "/profile", label: "个人中心", icon: "👤" },
 ];
 
 const MEMBERSHIP_COLORS: Record<string, string> = {

@@ -67,3 +67,11 @@ INVITE_CODE_REQUIRED: bool = os.getenv("INVITE_CODE_REQUIRED", "false").lower() 
 # ---- 签到加成 ----
 CHECKIN_STREAK_7_BONUS: int = int(os.getenv("CHECKIN_STREAK_7_BONUS", "50"))
 CHECKIN_STREAK_30_BONUS: int = int(os.getenv("CHECKIN_STREAK_30_BONUS", "200"))
+
+# ---- 邮箱验证 ----
+VERIFICATION_BASE_URL: str = os.getenv("VERIFICATION_BASE_URL", "http://localhost:3000")
+SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER: str = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+EMAIL_FROM: str = os.getenv("EMAIL_FROM", "noreply@content-studio.app")
