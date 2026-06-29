@@ -71,6 +71,7 @@ class UpdateUserRequest(BaseModel):
     membership_type: str | None = None
     role: str | None = None
     disabled: bool | None = None
+    email_verified: bool | None = None
     new_password: str | None = None
 
 
@@ -225,6 +226,11 @@ async def update_user(
         if req.disabled is not None:
             user.disabled = req.disabled
             changed.append(f"disabled: {req.disabled}")
+
+        # 邮箱验证状态
+        if req.email_verified is not None:
+            user.email_verified = req.email_verified
+            changed.append(f"email_verified: {req.email_verified}")
 
         # 重置密码
         if req.new_password:

@@ -332,6 +332,7 @@ function AdminPage() {
       points: u.points as number,
       membership_type: u.membership_type as string,
       disabled: u.disabled as boolean,
+      email_verified: u.email_verified as boolean,
       new_password: "",
     });
     setMessage(null);
@@ -343,6 +344,7 @@ function AdminPage() {
     if (editForm.points !== undefined) body.points = editForm.points;
     if (editForm.membership_type !== undefined) body.membership_type = editForm.membership_type;
     if (editForm.disabled !== undefined) body.disabled = editForm.disabled;
+    if (editForm.email_verified !== undefined) body.email_verified = editForm.email_verified;
     if ((editForm.new_password as string)?.trim()) body.new_password = editForm.new_password;
 
     const res = await apiFetch(`/api/admin/users/${editingUser.id}`, {
@@ -664,6 +666,11 @@ function AdminPage() {
                   <input type="checkbox" checked={editForm.disabled as boolean}
                     onChange={(e) => setEditForm({ ...editForm, disabled: e.target.checked })} />
                   <label className="text-xs" style={{ color: "var(--text-muted)" }}>禁用此用户</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={editForm.email_verified as boolean}
+                    onChange={(e) => setEditForm({ ...editForm, email_verified: e.target.checked })} />
+                  <label className="text-xs" style={{ color: "var(--text-muted)" }}>已验证邮箱</label>
                 </div>
                 <div>
                   <label className="text-xs" style={{ color: "var(--text-muted)" }}>重置密码（留空不修改）</label>
