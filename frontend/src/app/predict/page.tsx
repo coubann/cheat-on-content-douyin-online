@@ -136,7 +136,7 @@ function RadarChart({ dimensions }: { dimensions: DimensionScore[] }) {
         <polygon points={pathData} fill="rgba(34, 197, 94, 0.2)" stroke="#22c55e" strokeWidth="2" />
         {points.map((p, i) => (<circle key={i} cx={p.x} cy={p.y} r="3" fill="#22c55e" />))}
       </svg>
-      <div className="grid grid-cols-5 gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
         {points.map((p) => (<span key={p.label}>{p.label} <strong>{p.score}</strong></span>))}
       </div>
     </div>

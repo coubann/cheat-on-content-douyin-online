@@ -156,7 +156,7 @@ export default function SeedPage() {
                       {Object.keys(dims).length > 0 && (
                         <div>
                           <div className="text-xs font-semibold mb-2" style={{ color: "var(--text-muted)" }}>预估维度分</div>
-                          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                             {Object.entries(dims).map(([key, val]) => (
                               <div key={key} className="flex items-center gap-2">
                                 <span className="text-xs w-16" style={{ color: "var(--text-muted)" }}>{DIM_LABELS[key] || key}</span>

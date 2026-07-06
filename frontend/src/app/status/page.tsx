@@ -178,7 +178,7 @@ export default function StatusPage() {
       {/* Rubric 权重 */}
       <div className="card mt-6">
         <h2 className="mb-4 text-lg font-semibold">Rubric 权重</h2>
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           {Object.entries(status.rubric_weights).map(([dim, weight]) => (
             <div key={dim} className="text-center">
               <div className="text-lg font-bold">{dim}</div>

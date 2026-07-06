@@ -48,6 +48,7 @@ export default function HomePage() {
   const [notifSummary, setNotifSummary] = useState<NotificationSummary | null>(null);
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  const { user, token, loading } = useAuth();
 
   // 邮箱验证结果提示
   useEffect(() => {
@@ -63,6 +64,8 @@ export default function HomePage() {
       }, 5000);
     }
   }, [searchParams]);
+
+  useEffect(() => {
     apiFetch<StatusData>("/api/status").then((res) => {
       if (res.ok && res.data) setStatus(res.data);
     });
@@ -217,7 +220,7 @@ export default function HomePage() {
       </div>
 
       {/* Module grid */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {modules.map((m) => (
           <a
             key={m.href}
@@ -243,7 +246,7 @@ export default function HomePage() {
       {/* Methodology reminder */}
       <div className="mt-8 card" style={{ borderColor: "var(--border-accent)" }}>
         <h3 className="text-sm font-semibold text-glow">三条不可妥协原则</h3>
-        <div className="mt-3 grid grid-cols-3 gap-4 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm" style={{ color: "var(--text-secondary)" }}>
           <div>
             <span className="font-medium" style={{ color: "#22c55e" }}>01</span> 盲预测 immutable — 预测段一旦写入不可修改
           </div>

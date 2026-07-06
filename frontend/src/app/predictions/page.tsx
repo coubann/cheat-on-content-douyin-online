@@ -439,7 +439,7 @@ export default function PredictionsPage() {
             {/* 维度速览 - 横向条形图（点击展开关联建议） */}
             <div className="card">
               <h2 className="text-lg font-semibold mb-4">各维度评分 <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>点击维度查看改稿建议</span></h2>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 {parsed.dimensions.map((d) => (
                   <DimBar key={d.key} label={d.label} score={d.score} confidence={d.confidence} reason={d.reason}
                     dimKey={d.key} suggestions={parsed.suggestions} expandedDim={expandedDim} setExpandedDim={setExpandedDim} />
@@ -469,7 +469,7 @@ export default function PredictionsPage() {
 
             {/* 风险/亮点 */}
             {(parsed.risks.length > 0 || parsed.highlights.length > 0) && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {parsed.risks.length > 0 && (
                   <div className="card" style={{ borderColor: "rgba(239,68,68,0.3)" }}>
                     <h3 className="text-sm font-semibold mb-3" style={{ color: "#ef4444" }}>&#x26A0; 风险信号</h3>
@@ -614,7 +614,7 @@ export default function PredictionsPage() {
             {parsed.subScores.length > 0 && (
               <div className="card">
                 <h2 className="text-lg font-semibold mb-4">爆款子分</h2>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {parsed.subScores.map((s) => (
                     <div key={s.key} className="text-center p-3 rounded-lg" style={{ background: "var(--bg-input)" }}>
                       <div className="text-2xl font-bold" style={{ color: "#22c55e" }}>
@@ -640,9 +640,9 @@ export default function PredictionsPage() {
               </div>
             </div>
 
-            {/* 风险/亮点 */}
+            {/* 风险/亮点 — 详细模式 */}
             {(parsed.risks.length > 0 || parsed.highlights.length > 0) && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {parsed.risks.length > 0 && (
                   <div className="card" style={{ borderColor: "rgba(239,68,68,0.3)" }}>
                     <h3 className="text-sm font-semibold mb-3" style={{ color: "#ef4444" }}>风险信号</h3>

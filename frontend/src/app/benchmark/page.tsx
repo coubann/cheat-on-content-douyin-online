@@ -349,7 +349,7 @@ export default function BenchmarkPage() {
               {Object.keys(styleResult.fingerprint.traits).length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2" style={{ color: "#22c55e" }}>关键特征</h3>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {Object.entries(styleResult.fingerprint.traits).map(([key, value]) => (
                       <div key={key} className="rounded-lg p-3" style={{ background: "var(--bg-input)" }}>
                         <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{TRAIT_LABELS[key] || key}</div>
@@ -552,7 +552,7 @@ export default function BenchmarkPage() {
                 {Object.keys(detailData.traits).length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold mb-2" style={{ color: "#22c55e" }}>关键特征</h3>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {Object.entries(detailData.traits).map(([key, value]) => (
                         <div key={key} className="rounded-lg p-3" style={{ background: "var(--bg-input)" }}>
                           <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{TRAIT_LABELS[key] || key}</div>

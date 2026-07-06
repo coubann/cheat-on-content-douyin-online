@@ -31,3 +31,9 @@ Thumbs.db
 
 # 文档（按用户要求排除所有 markdown）
 *.md
+
+# 敏感工具（含飞书密钥）
+feishu_upload.py
+
+# 临时图片
+auth_qrcode.png

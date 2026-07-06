@@ -127,7 +127,7 @@ function PublishPageContent() {
         <div className="space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           <p><strong style={{ color: "var(--text-primary)" }}>复盘 = 发布后回看实际数据，对比预测是否准确</strong></p>
           <p>操作流程：</p>
-          <div className="grid grid-cols-3 gap-3 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
             <div className="rounded-lg p-3 text-center" style={{ background: "var(--bg-input)" }}>
               <div className="text-lg font-bold" style={{ color: "#22c55e" }}>1</div>
               <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>写脚本 → 预测爆款分</div>

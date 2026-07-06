@@ -155,7 +155,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
             <span style={{ color: "var(--text-muted)" }}>免费点数</span>
             <p className="text-lg font-semibold" style={{ color: "var(--accent)" }}>
@@ -327,7 +327,7 @@ export default function ProfilePage() {
         <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
           充值点数永久有效，用完为止
         </p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {rechargeStatus.error && (
             <p className="text-sm mb-3 col-span-3" style={{ color: "#ef4444" }}>
               {rechargeStatus.error}

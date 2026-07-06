@@ -14,6 +14,7 @@ export interface UserInfo {
   checkin_streak: number;
   invite_code: string | null;
   disabled: boolean;
+  email_verified: boolean;
   guide_step: number;
   created_at: string | null;
   last_login_at: string | null;

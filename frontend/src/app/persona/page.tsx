@@ -86,7 +86,7 @@ export default function PersonaPage() {
         <div className="mt-6 space-y-6">
           <div className="card">
             <h2 className="text-xl font-bold">{persona.persona.name}</h2>
-            <div className="mt-3 grid grid-cols-3 gap-4">
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <div className="text-sm" style={{ color: "var(--text-muted)" }}>年龄段</div>
                 <div className="font-medium">{persona.persona.demographics.age_range}</div>
