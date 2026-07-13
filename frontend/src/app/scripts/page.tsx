@@ -25,6 +25,7 @@ export default function ScriptsPage() {
   const [editContent, setEditContent] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -33,22 +34,41 @@ export default function ScriptsPage() {
   }, [user, authLoading, router]);
 
   const loadScripts = async () => {
-    const res = await apiFetch<{ scripts: Script[] }>("/api/scripts");
+    // 强制不缓存，避免新建后重新拉取列表时命中旧缓存而看不到新脚本
+    const res = await apiFetch<{ scripts: Script[] }>("/api/scripts", {
+      cache: "no-store",
+    });
     if (res.ok && res.data) setScripts(res.data.scripts);
   };
 
   const handleCreate = async () => {
     if (!title || !content) return;
     setSaving(true);
-    const res = await apiFetch("/api/scripts", {
+    setCreateError(null);
+    const res = await apiFetch<{ id: string; title: string }>("/api/scripts", {
       method: "POST",
       body: JSON.stringify({ title, content }),
     });
-    if (res.ok) {
+    if (res.ok && res.data) {
+      // 将新建返回的脚本直接追加到本地 state，保证立即可见，
+      // 不依赖（可能命中缓存的）重新拉取结果。
+      const newScript: Script = {
+        id: res.data.id,
+        title: res.data.title,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        size_bytes: 0,
+      };
+      setScripts((prev) => [newScript, ...prev]);
       setTitle("");
       setContent("");
       setShowCreate(false);
       loadScripts();
+    } else {
+      // 创建失败：给出可见提示，避免静默失败（用户体感"创建了但不显示"）。
+      const msg = res.error?.message || "创建失败，请重试";
+      setCreateError(msg);
+      window.alert(msg);
     }
     setSaving(false);
   };
@@ -127,6 +147,11 @@ export default function ScriptsPage() {
           >
             {saving ? "创建中..." : "创建"}
           </button>
+          {createError && (
+            <p className="text-sm mt-2" style={{ color: "#ef4444" }}>
+              {createError}
+            </p>
+          )}
         </div>
       )}
 
@@ -185,7 +210,10 @@ export default function ScriptsPage() {
         {scripts.length === 0 ? (
           <p style={{ color: "var(--text-muted)" }}>暂无草稿，点击"新建草稿"开始</p>
         ) : (
-          scripts.map((s) => (
+          scripts
+            .slice()
+            .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+            .map((s) => (
             <div key={s.id} className="card flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{s.title || s.id}</div>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,14 +32,43 @@ async def list_scripts(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]
     scripts: list[dict[str, Any]] = []
     for f in sorted(scripts_dir.glob("*.md")):
         stat = f.stat()
+        # 默认用文件名（脚本 id）作为标题，再从 Markdown 首行 "# {title}" 解析真实标题，
+        # 保证列表展示的是用户填写的标题，而非内部 id。
+        title = f.stem
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                first_line = fh.readline()
+            if first_line.startswith("# "):
+                title = first_line[2:].strip()
+        except (OSError, UnicodeDecodeError):
+            pass
         scripts.append({
             "id": f.stem,
-            "title": f.stem,
+            "title": title,
             "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
             "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "size_bytes": stat.st_size,
         })
     return scripts
+
+
+def _sanitize_filename_segment(title: str) -> str:
+    """清洗用于文件名的标题片段，确保绝不含任何文件系统路径分隔符
+
+    仅影响 script_id 的文件名段，不改变写入文件的 content 内容。
+
+    Pre-conditions:
+      - title 为任意字符串
+    Post-conditions:
+      - 返回不含路径分隔符 / 非法字符的字符串
+    Side effects:
+      - 无
+    """
+    # 替换 Unix/Windows 路径分隔符、非法字符以及控制字符为下划线
+    cleaned = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]', "_", title)
+    # 去除首尾空白与句点，避免以 "." 结尾或清洗后为空名
+    cleaned = cleaned.strip().strip(".")
+    return cleaned or "untitled"
 
 
 async def create_script(data_dir: Path, user_id: int, title: str, content: str) -> dict[str, Any]:
@@ -61,9 +91,12 @@ async def create_script(data_dir: Path, user_id: int, title: str, content: str) 
     scripts_dir.mkdir(parents=True, exist_ok=True)
 
     # 生成 ID：日期 + hash 前8位
+    # 注意：title 必须先做路径安全清洗，否则含 "/" 等字符时会生成非法文件名，
+    # 导致 safe_write 因父目录不存在抛 FileNotFoundError 而 500（见 Bug A）。
     date_str = datetime.now().strftime("%Y-%m-%d")
     hash_prefix = hashlib.sha256(content.encode()).hexdigest()[:8]
-    script_id = f"{date_str}_{hash_prefix}_{title[:20]}"
+    safe_title = _sanitize_filename_segment(title)
+    script_id = f"{date_str}_{hash_prefix}_{safe_title[:20]}"
 
     script_path = scripts_dir / f"{script_id}.md"
     if script_path.exists():

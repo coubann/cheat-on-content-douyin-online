@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+import structlog
 
 from backend.app.config import DATA_DIR
-from backend.app.errors import SCRIPT_NOT_FOUND
+from backend.app.errors import SCRIPT_NOT_FOUND, SCRIPT_EXISTS, SCRIPT_CREATE_FAILED
 from backend.app.models.response import ApiResponse, ErrorDetail
 from backend.app.services.scripts_service import (
     create_script as svc_create,
@@ -25,6 +26,7 @@ from backend.app.services.scripts_service import (
 )
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 
 class CreateScriptRequest(BaseModel):
@@ -48,8 +50,29 @@ async def list_scripts(request: Request) -> ApiResponse:
 async def create_script(req: CreateScriptRequest, request: Request) -> ApiResponse:
     """新建草稿"""
     user_id = getattr(request.state, "user_id", 0)
-    result = await svc_create(DATA_DIR, user_id, req.title, req.content)
-    return ApiResponse(ok=True, data=result)
+    try:
+        result = await svc_create(DATA_DIR, user_id, req.title, req.content)
+        return ApiResponse(ok=True, data=result)
+    except FileExistsError:
+        # 同名脚本已存在（safe_write 前已做存在性校验并抛出）
+        return ApiResponse(
+            ok=False,
+            error=ErrorDetail(
+                code=SCRIPT_EXISTS,
+                message="同名脚本已存在",
+                suggested_action="请修改标题后重试",
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - 兜底，避免进程抛 500
+        logger.error("create_script_failed", user_id=user_id, error=str(exc))
+        return ApiResponse(
+            ok=False,
+            error=ErrorDetail(
+                code=SCRIPT_CREATE_FAILED,
+                message="创建脚本失败，请稍后重试",
+                suggested_action="若问题持续，请联系管理员",
+            ),
+        )
 
 
 @router.get("/{script_id}")
