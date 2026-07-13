@@ -12,6 +12,7 @@ export interface UserInfo {
   free_points_today: number;
   membership_type: string;
   checkin_streak: number;
+  email_verified: boolean;
   invite_code: string | null;
   disabled: boolean;
   email_verified: boolean;

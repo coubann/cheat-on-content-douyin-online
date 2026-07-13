@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
 import structlog
 
 from backend.app.services.file_io import read_file, safe_write
+
+# 中国标准时间（UTC+8）。中国无夏令时，使用固定偏移即可，
+# 同时可避免 Docker 镜像缺少 tzdata / 系统时区数据导致的问题。
+CST = timezone(timedelta(hours=8))
 
 logger = structlog.get_logger()
 
@@ -45,8 +49,8 @@ async def list_scripts(data_dir: Path, user_id: int = 0) -> list[dict[str, Any]]
         scripts.append({
             "id": f.stem,
             "title": title,
-            "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-            "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "created_at": datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).astimezone(CST).isoformat(),
+            "updated_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).astimezone(CST).isoformat(),
             "size_bytes": stat.st_size,
         })
     return scripts
@@ -93,7 +97,7 @@ async def create_script(data_dir: Path, user_id: int, title: str, content: str) 
     # 生成 ID：日期 + hash 前8位
     # 注意：title 必须先做路径安全清洗，否则含 "/" 等字符时会生成非法文件名，
     # 导致 safe_write 因父目录不存在抛 FileNotFoundError 而 500（见 Bug A）。
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_str = datetime.now(CST).strftime("%Y-%m-%d")
     hash_prefix = hashlib.sha256(content.encode()).hexdigest()[:8]
     safe_title = _sanitize_filename_segment(title)
     script_id = f"{date_str}_{hash_prefix}_{safe_title[:20]}"
@@ -105,7 +109,7 @@ async def create_script(data_dir: Path, user_id: int, title: str, content: str) 
     # 写入脚本（带 header）
     full_content = f"""# {title}
 
-> 创建时间: {datetime.now().isoformat()}
+> 创建时间: {datetime.now(CST).isoformat()}
 
 ---
 
@@ -136,8 +140,8 @@ async def get_script(data_dir: Path, script_id: str, user_id: int = 0) -> dict[s
     return {
         "id": script_id,
         "content": content,
-        "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
-        "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "created_at": datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).astimezone(CST).isoformat(),
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).astimezone(CST).isoformat(),
     }
 
 
