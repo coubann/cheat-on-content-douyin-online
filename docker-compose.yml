@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    ports:
-      - "8000:8000"
+    # 端口映射仅在 docker-compose.prod.yml 中定义（127.0.0.1 仅本机访问，供 Nginx 反代）。
+    # 此处若再声明会与 prod 叠加，导致 8000 端口被重复绑定、容器起不来（502）。
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/content_studio.db
       - PYTHONPATH=/app
@@ -24,8 +24,7 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         - NEXT_PUBLIC_API_URL=http://douyin.hapaxtrace.com
-    ports:
-      - "3001:3000"
+    # 端口映射仅在 docker-compose.prod.yml 中定义（127.0.0.1:3001 仅本机访问，供 Nginx 反代）。
     environment:
       - NEXT_PUBLIC_API_URL=http://douyin.hapaxtrace.com
       - NODE_ENV=production
