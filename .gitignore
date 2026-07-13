@@ -12,6 +12,7 @@ dist/
 node_modules/
 .next/
 out/
+*.tsbuildinfo
 
 # 本地数据库
 data/*.db
