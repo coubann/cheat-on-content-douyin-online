@@ -34,7 +34,7 @@ from backend.app.services.blind_scorer import score_script as blind_score
 from backend.app.services.file_io import get_prediction_hash, read_file, safe_write
 from backend.app.services.llm import call_llm_json
 from backend.app.services.predictor import predict_virality
-from backend.app.services.scripts_service import _resolve_script_path
+from backend.app.services.scripts_service import _resolve_script_path, DEFAULT_USER_ID
 
 logger = structlog.get_logger()
 
@@ -249,19 +249,31 @@ async def generate_optimized_script(data_dir: Path, prediction_id: str, user_id:
     preds_dir = user_data_dir / "predictions"
     scripts_dir = user_data_dir / "scripts"
 
-    # 1. 读取预测文件
+    # 1. 读取预测文件（先查本用户目录，回退默认共享空间 data/0/predictions/）
     pred_path = preds_dir / f"{prediction_id}.md"
     if not pred_path.exists():
         candidates = list(preds_dir.glob(f"*{prediction_id}*.md"))
         if not candidates:
-            raise FileNotFoundError(f"预测不存在: {prediction_id}")
-        pred_path = candidates[0]
+            # 回退到默认共享空间
+            default_preds = data_dir / str(DEFAULT_USER_ID) / "predictions"
+            pred_path = default_preds / f"{prediction_id}.md"
+            if not pred_path.exists():
+                candidates = list(default_preds.glob(f"*{prediction_id}*.md")) if default_preds.exists() else []
+                if not candidates:
+                    raise FileNotFoundError(f"预测不存在: {prediction_id}")
+            else:
+                candidates = []
+        if candidates:
+            pred_path = candidates[0]
     pred_content = read_file(pred_path)
 
-    # 2. 读取原始脚本
-    script_path = scripts_dir / f"{prediction_id}.md"
+    # 2. 读取原始脚本（复用 _resolve_script_path 回退查找）
+    script_path = _resolve_script_path(data_dir, prediction_id, user_id)
     if not script_path.exists():
-        candidates = list(scripts_dir.glob(f"*{prediction_id}*.md"))
+        candidates = list((data_dir / str(user_id) / "scripts").glob(f"*{prediction_id}*.md")) if (data_dir / str(user_id) / "scripts").exists() else []
+        if not candidates:
+            default_scripts = data_dir / str(DEFAULT_USER_ID) / "scripts"
+            candidates = list(default_scripts.glob(f"*{prediction_id}*.md")) if default_scripts.exists() else []
         if not candidates:
             raise FileNotFoundError(f"脚本不存在: {prediction_id}")
         script_path = candidates[0]
