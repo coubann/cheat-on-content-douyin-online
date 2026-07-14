@@ -74,7 +74,7 @@ export default function ScriptsPage() {
   };
 
   const handleEdit = async (id: string) => {
-    const res = await apiFetch<{ id: string; content: string }>(`/api/scripts/${id}`);
+    const res = await apiFetch<{ id: string; content: string }>(`/api/scripts/${encodeURIComponent(id)}`);
     if (res.ok && res.data) {
       setEditingId(id);
       setEditContent(res.data.content);
@@ -84,7 +84,7 @@ export default function ScriptsPage() {
   const handleSaveEdit = async () => {
     if (!editingId || !editContent) return;
     setEditLoading(true);
-    const res = await apiFetch(`/api/scripts/${editingId}`, {
+    const res = await apiFetch(`/api/scripts/${encodeURIComponent(editingId)}`, {
       method: "PUT",
       body: JSON.stringify({ content: editContent }),
     });
@@ -97,7 +97,7 @@ export default function ScriptsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const res = await apiFetch(`/api/scripts/${id}`, {
+    const res = await apiFetch(`/api/scripts/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     if (res.ok) {
