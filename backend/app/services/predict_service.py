@@ -34,6 +34,7 @@ from backend.app.services.blind_scorer import score_script as blind_score
 from backend.app.services.file_io import get_prediction_hash, read_file, safe_write
 from backend.app.services.llm import call_llm_json
 from backend.app.services.predictor import predict_virality
+from backend.app.services.scripts_service import _resolve_script_path
 
 logger = structlog.get_logger()
 
@@ -61,13 +62,19 @@ async def full_predict(data_dir: Path, script_id: str, user_id: int = 0) -> dict
 
     # 用户隔离路径
     user_data_dir = data_dir / str(user_id)
-    scripts_dir = user_data_dir / "scripts"
     predictions_dir = user_data_dir / "predictions"
 
     # Phase 1: 读取脚本 + state
-    script_path = scripts_dir / f"{script_id}.md"
+    # 复用 scripts_service 的路径解析：先查本用户空间，回退默认共享空间(data/0)
+    script_path = _resolve_script_path(data_dir, script_id, user_id)
     if not script_path.exists():
         raise FileNotFoundError(f"{SCRIPT_NOT_FOUND}: {script_id}")
+
+    # 脚本实际所在的数据目录（user_data_dir 级别）。
+    # 当脚本回退到共享空间(data/0)时，blind_score / predict_virality 也需要
+    # 从该目录读取脚本，否则会再次因路径找不到而失败。
+    # script_path 形如 data_dir/{uid}/scripts/{id}.md，向上两级即用户数据目录。
+    script_data_dir = script_path.parent.parent
 
     state_path = data_dir / ".cheat-state.json"
     state = CheatState.model_validate_json(read_file(state_path))
@@ -76,14 +83,14 @@ async def full_predict(data_dir: Path, script_id: str, user_id: int = 0) -> dict
 
     logger.info("predict_phase1_complete", script_hash=script_hash, user_id=user_id)
 
-    # Phase 2: 盲打分（传入 user_data_dir 以读取用户隔离的脚本）
-    score_data = await blind_score(user_data_dir, script_id)
+    # Phase 2: 盲打分（传入 script_data_dir 以读取脚本实际所在目录的脚本）
+    score_data = await blind_score(script_data_dir, script_id)
     score_result = ScoreResult(**score_data)
 
     logger.info("predict_score_returned", composite=score_result.composite, user_id=user_id)
 
-    # Phase 3: 爆款预测（传入 user_data_dir 以读取用户隔离的校准池）
-    virality = await predict_virality(user_data_dir, script_id, score_result, state)
+    # Phase 3: 爆款预测（传入 script_data_dir 以读取脚本实际所在目录的校准池）
+    virality = await predict_virality(script_data_dir, script_id, score_result, state)
 
     logger.info("predict_virality_returned", virality_score=virality["virality_score"], user_id=user_id)
 
